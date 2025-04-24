@@ -251,5 +251,6 @@ for epoch in range(opt.niter):
             torch.save(netG.state_dict(), '{0}/netG_epoch_{1}_{2}_{3}.pth'.format(opt.experiment, gen_iterations, opt.problem, opt.nz))
 
     # do checkpointing
-    #torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, epoch))
-    #torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, epoch))
+    # Save final model state
+    torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, epoch))
+    torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, epoch))

@@ -5,6 +5,8 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.Random;
+import java.awt.Color;
+import java.awt.Image;
 
 import javax.imageio.ImageIO;
 
@@ -79,6 +81,54 @@ public class MarioRandomLevelViewer {
 		return array;
 	}
 	
+	/**
+	 * Renders the level map to a BufferedImage manually, 
+	 * using Art.getTile without relying on LevelRenderer.
+	 * Should work in headless mode if Art.init() succeeded.
+	 * @param level Level object
+	 * @param excludeBufferRegion Whether to clip buffer zones
+	 * @return BufferedImage of the level map
+	 */
+	public static BufferedImage renderLevelMapHeadless(Level level, boolean excludeBufferRegion) {
+		int startX = excludeBufferRegion ? LevelParser.BUFFER_WIDTH : 0;
+		int endX = level.width - (excludeBufferRegion ? LevelParser.BUFFER_WIDTH : 0);
+		int renderWidth = (endX - startX) * BLOCK_SIZE;
+		
+		if(renderWidth <= 0) renderWidth = 1; // Ensure width is at least 1
+		BufferedImage image = new BufferedImage(renderWidth, LEVEL_HEIGHT * BLOCK_SIZE, BufferedImage.TYPE_INT_RGB);
+		Graphics2D g = image.createGraphics();
+
+		// Fill background (e.g., white)
+		g.setColor(java.awt.Color.WHITE);
+		g.fillRect(0, 0, image.getWidth(), image.getHeight());
+
+		for (int x = startX; x < endX; x++) {
+		    for (int y = 0; y < level.height; y++) {
+		        int tileByte = level.getBlock(x, y) & 0xFF;
+		        // Simple color mapping based on tile byte
+		        Color tileColor = new Color(tileByte * 17 % 255, tileByte * 23 % 255, tileByte * 31 % 255);
+		        g.setColor(tileColor);
+		        g.fillRect((x - startX) * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+		    }
+		}
+		g.dispose(); // Release graphics resources
+		return image;
+	}
+
+	/**
+	 * Save level as a PNG using manual headless rendering.
+	 * @param level Mario Level
+	 * @param name Filename, including png extension
+	 * @param clipBuffer Whether to exclude the buffer region
+	 * @throws IOException
+	 */
+	public static void saveLevelManually(Level level, String name, boolean clipBuffer) throws IOException {
+		BufferedImage image = renderLevelMapHeadless(level, clipBuffer);
+		File file = new File(name);
+		ImageIO.write(image, "png", file);		
+		System.out.println("File saved: " + file);
+	}
+
 	public static void main(String[] args) throws IOException {
 		Settings.setPythonProgram();
 
@@ -102,8 +152,9 @@ public class MarioRandomLevelViewer {
 			} else {
 				level = eval.levelFromLatentVector(randomGaussianDoubleArray(dim));
 			}
-			saveLevel(level, "randomSamples" + File.separator + filenameHead + "LevelClipped_" + i, true);
-			saveLevel(level, "randomSamples" + File.separator + filenameHead+ "LevelFull_" + i, false);
+			// Replace saveLevel with manual version
+			saveLevelManually(level, "randomSamples" + File.separator + filenameHead + "LevelClipped_" + i + ".png", true);
+			saveLevelManually(level, "randomSamples" + File.separator + filenameHead+ "LevelFull_" + i + ".png", false);
 		}
 		eval.exit();
 		System.exit(0);

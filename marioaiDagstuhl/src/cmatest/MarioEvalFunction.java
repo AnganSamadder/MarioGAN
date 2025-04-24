@@ -33,8 +33,9 @@ public class MarioEvalFunction implements IObjectiveFunction {
 		ganProcess = new GANProcess();
 		ganProcess.start();
 		// set up mario game
-		marioProcess = new MarioProcess();
-		marioProcess.start();        
+		// Comment out MarioProcess initialization as it requires graphics
+		// marioProcess = new MarioProcess();
+		// marioProcess.start();        
 		// consume all start-up messages that are not data responses
 		String response = "";
 		while(!response.equals("READY")) {
@@ -47,8 +48,9 @@ public class MarioEvalFunction implements IObjectiveFunction {
 		ganProcess = new GANProcess(GANPath, GANDim);
 		ganProcess.start();
 		// set up mario game
-		marioProcess = new MarioProcess();
-		marioProcess.start();        
+		// Comment out MarioProcess initialization as it requires graphics
+		// marioProcess = new MarioProcess();
+		// marioProcess.start();        
 		// consume all start-up messages that are not data responses
 		String response = "";
 		while(!response.equals("READY")) {
