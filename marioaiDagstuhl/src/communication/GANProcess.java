@@ -13,7 +13,7 @@ public class GANProcess extends Comm {
         super();
         this.threadName = "GANThread";
     }
-    
+
     public GANProcess(String GANPath, String GANDim) {
         super();
         this.threadName = "GANThread";
@@ -35,14 +35,14 @@ public class GANProcess extends Comm {
     	
         // Run program with model architecture and weights specified as parameters
         ProcessBuilder builder = null;
-        if(this.GANPath == null){
+        if (this.GANPath == null) {
             builder = new ProcessBuilder(PYTHON_PROGRAM, WASSERSTEIN_PATH, WASSERSTEIN_GAN, GAN_DIM);
-        }else{
+        } else {
             builder = new ProcessBuilder(PYTHON_PROGRAM, WASSERSTEIN_PATH, this.GANPath, this.GANDim);
         }
         builder.redirectError(Redirect.INHERIT); // Standard error will print to console
-        	try {
-        		System.out.println(builder.command());
+        try {
+            System.out.println(builder.command());
             this.process = builder.start();
         } catch (IOException e) {
             e.printStackTrace();
@@ -54,7 +54,7 @@ public class GANProcess extends Comm {
      */
     @Override
     public void initBuffers() {
-        //Initialize input and output
+        // Initialize input and output
         if (this.process != null) {
             this.reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             this.writer = new PrintStream(this.process.getOutputStream());

@@ -111,3 +111,15 @@ out
 marioaiDagstuhl/marioaiDagstuhl.iml
 *.dat
 my_python_path.txt
+
+# Java compiled classes
+marioaiDagstuhl/bin/
+
+# Python training outputs
+/samples/
+/pytorch/samples/
+*.pth
+*.png
+
+# Temp files
+marioaiDagstuhl/sources.txt
