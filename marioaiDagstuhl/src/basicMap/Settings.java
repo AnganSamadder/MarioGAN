@@ -16,11 +16,10 @@ public class Settings {
     public static final boolean ACCESSIBLE = true;
 
     public static final String CMD_SEPARATOR = " ";
-    // Paths relative to the marioaiDagstuhl execution directory
-    public static final String WASSERSTEIN_PATH = ".." + File.separator + "pytorch" + File.separator
-            + "generator_ws.py";
-    public static final String WASSERSTEIN_GAN = ".." + File.separator + "samples" + File.separator
-            + "netG_epoch_100_0_32.pth";
+    // Paths relative to the marioaiDagstuhl execution directory -- Changed to
+    // project root
+    public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
+    public static final String WASSERSTEIN_GAN = "samples" + File.separator + "final.pth";
     public static final String GAN_DIM = "32";
 
     // Jacob: IMPORTANT! This is a system-specific path that I had to set.

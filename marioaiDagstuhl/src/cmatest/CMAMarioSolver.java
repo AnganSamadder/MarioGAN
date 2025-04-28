@@ -157,7 +157,6 @@ public class CMAMarioSolver {
                         currentRun, totalRuns, currentEvalForProgress, maxEval, paddedBar, progress * 100);
                 System.err.flush(); // Ensure the error stream output is written immediately
                 // --- End Inner Progress Bar Update ---
-
             }
             cma.updateDistribution(fitness); // pass fitness array to update search distribution
             // --- end core iteration step ---
