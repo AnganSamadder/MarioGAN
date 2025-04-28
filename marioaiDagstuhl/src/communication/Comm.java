@@ -33,7 +33,8 @@ public abstract class Comm extends Thread {
      * @param msg message to send.
      */
     public void commSend(String msg) throws IOException {
-        printInfoMsg("[" + this.threadName + "] Comm:commSend will send "+ msg + " to GAN");
+        // printInfoMsg("[" + this.threadName + "] Comm:commSend will send "+ msg + " to
+        // GAN"); // Commented out
         writer.println(msg);
         writer.flush();
     }
@@ -44,27 +45,27 @@ public abstract class Comm extends Thread {
      * @return the response
      */
     public String commRecv() {
-    	String msg = processCommRecv();
-    	return msg;
+        String msg = processCommRecv();
+        return msg;
     }
 
-    private String processCommRecv(){
-    	String msg = null;
-    	try {
-    		msg = reader.readLine();
-    		System.out.println("processCommRecv:"+msg);
-    		if (msg != null) {
-    			return msg;
-    		} else {
-    			printErrorMsg("processCommRecv: Null message.");
-    			return null;
-    		}
-    	} catch (IOException e) {
-    		// TODO Auto-generated catch block
-    		e.printStackTrace();
-    	}
-		printErrorMsg("processCommRecv: exception.");
-		return null;
+    private String processCommRecv() {
+        String msg = null;
+        try {
+            msg = reader.readLine();
+            // System.out.println("processCommRecv:"+msg); // Commented out
+            if (msg != null) {
+                return msg;
+            } else {
+                printErrorMsg("processCommRecv: Null message.");
+                return null;
+            }
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        printErrorMsg("processCommRecv: exception.");
+        return null;
     }
 
 }

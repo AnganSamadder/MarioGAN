@@ -118,7 +118,7 @@ public class JsonReader {
     	{
     		List<List<Integer>> myFirstSubList = new ArrayList<List<Integer>>();
     		JsonArray jarrayi = ((JsonArray)jarray1.get(i));
-    	    System.out.println(jarrayi);
+    	    // System.out.println(jarrayi); // Commented out - This was printing the raw level data
     	    for(int j = 0; j < jarrayi.size();j++)
     		{
     			List<Integer> mySecondSubList = new ArrayList<Integer>();

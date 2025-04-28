@@ -597,8 +597,8 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
         // Sprite.spriteContext = this;
         sprites.clear();
         // Conditionally create rendering layers only if visualization is on
-        System.out.println(
-                "DEBUG: LevelScene.init - Checking GlobalOptions.VisualizationOn = " + GlobalOptions.VisualizationOn);
+        // System.out.println(
+        //         "DEBUG: LevelScene.init - Checking GlobalOptions.VisualizationOn = " + GlobalOptions.VisualizationOn);
         if (GlobalOptions.VisualizationOn) {
             layer = new LevelRenderer(level, graphicsConfiguration, 320, 240);
             for (int i = 0; i < 2; i++) {
@@ -649,8 +649,8 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
         // Sprite.spriteContext = this;
         sprites.clear();
         // Conditionally create rendering layers only if visualization is on
-        System.out.println("DEBUG: LevelScene.init(Level) - Checking GlobalOptions.VisualizationOn = "
-                + GlobalOptions.VisualizationOn);
+        // System.out.println("DEBUG: LevelScene.init(Level) - Checking GlobalOptions.VisualizationOn = "
+        //         + GlobalOptions.VisualizationOn);
         if (GlobalOptions.VisualizationOn) {
             layer = new LevelRenderer(level, graphicsConfiguration, 320, 240);
             for (int i = 0; i < 2; i++) {
