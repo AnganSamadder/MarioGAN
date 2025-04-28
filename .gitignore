@@ -99,7 +99,7 @@ ENV/
 # mypy
 .mypy_cache/
 .DS_Stor
-/bin/
+*bin/
 
 sample_*.*
 
@@ -117,3 +117,8 @@ timeline*.txt
 
 # PyTorch model checkpoints
 *.pth
+
+# Other untracked files based on convention
+fake_sample.png
+*.properties
+sources.txt
