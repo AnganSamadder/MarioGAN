@@ -14,38 +14,39 @@ import java.io.PrintWriter;
 import java.io.IOException;
 
 public class CMAMarioSolver {
-	// Sebastian's Wasserstein GAN expects latent vectors of length 32
-	public static final int Z_SIZE = 32; // length of latent space vector
-	public static final int EVALS = 1000;
+    // Sebastian's Wasserstein GAN expects latent vectors of length 32
+    public static final int Z_SIZE = 32; // length of latent space vector
+    public static final int EVALS = 1000;
 
-	
     public static void main(String[] args) throws IOException {
         Settings.setPythonProgram();
         int loops = 100;
         double[][] bestX = new double[loops][32];
         double[] bestY = new double[loops];
         MarioEvalFunction marioEvalFunction = new MarioEvalFunction();
-        for(int i=0; i<loops; i++){
-            System.out.println("Iteration:"+ i);
+        for (int i = 0; i < loops; i++) {
+            System.out.println("Starting CMA-ES Run " + (i + 1) + " of " + loops + "...");
             CMAMarioSolver solver = new CMAMarioSolver(marioEvalFunction, Z_SIZE, EVALS);
-            FileWriter write = new FileWriter("timeline"+i+".txt", true);
+            FileWriter write = new FileWriter("timeline" + i + ".txt", true);
             PrintWriter print_line = new PrintWriter(write);
             double[] solution = solver.run(print_line);
             print_line.close();
-            System.out.println("Best solution = " + Arrays.toString(MarioEvalFunction.mapArrayToOne(solution)));
+            double currentBestFitness = solver.fitFun.valueOf(MarioEvalFunction.mapArrayToOne(solution));
+            System.out.println(
+                    "Finished CMA-ES Run " + (i + 1) + " of " + loops + ". Best Fitness Found: " + currentBestFitness);
             bestX[i] = MarioEvalFunction.mapArrayToOne(solution);
-            bestY[i] = solver.fitFun.valueOf(MarioEvalFunction.mapArrayToOne(solution));
+            bestY[i] = currentBestFitness;
         }
         marioEvalFunction.exit();
-        System.out.println("Done");
+        System.out.println("All " + loops + " CMA-ES runs completed.");
         FileWriter write = new FileWriter("ex_output.txt", true);
-            try (PrintWriter print_line = new PrintWriter(write)) {
-                for(int i=0;i<loops; i++){
-                    print_line.println(Arrays.toString(bestX[i]));
-                    System.out.println(Arrays.toString(bestX[i]));
-                }
-                print_line.println(Arrays.toString(bestY));
+        try (PrintWriter print_line = new PrintWriter(write)) {
+            for (int i = 0; i < loops; i++) {
+                print_line.println(Arrays.toString(bestX[i]));
+                System.out.println(Arrays.toString(bestX[i]));
             }
+            print_line.println(Arrays.toString(bestY));
+        }
         System.out.println(Arrays.toString(bestY));
         System.exit(0);
     }
@@ -60,9 +61,10 @@ public class CMAMarioSolver {
         cma = new CMAEvolutionStrategy();
         cma.readProperties(); // read options, see file CMAEvolutionStrategy.properties
         cma.setDimension(nDim); // overwrite some loaded properties
-        cma.setInitialX(-1,1); // set initial seach point xmean coordinate-wise uniform between l and u, dimension needs to have been set before
-        cma.setInitialStandardDeviation(1/Math.sqrt(nDim)); // also a mandatory setting
-        cma.options.stopFitness = -1e6; // 1e-14;       // optional setting
+        cma.setInitialX(-1, 1); // set initial seach point xmean coordinate-wise uniform between l and u,
+                                // dimension needs to have been set before
+        cma.setInitialStandardDeviation(1 / Math.sqrt(nDim)); // also a mandatory setting
+        cma.options.stopFitness = -1e6; // 1e-14; // optional setting
         // cma.options.stopMaxIter = 100;
         cma.options.stopMaxFunEvals = maxEvals;
         System.out.println("Diagonal: " + cma.options.diagonalCovarianceMatrix);
@@ -73,9 +75,11 @@ public class CMAMarioSolver {
         cma.setDimension(n);
     }
 
-    /*public void setInitialX(double x) {
-        cma.setInitialX(x);
-    }*/
+    /*
+     * public void setInitialX(double x) {
+     * cma.setInitialX(x);
+     * }
+     */
 
     public void setObjective(IObjectiveFunction fitFun) {
         this.fitFun = fitFun;
@@ -90,7 +94,7 @@ public class CMAMarioSolver {
         // new a CMA-ES and set some initial values
 
         // initialize cma and get fitness array to fill in later
-        double[] fitness = cma.init();  // new double[cma.parameters.getPopulationSize()];
+        double[] fitness = cma.init(); // new double[cma.parameters.getPopulationSize()];
 
         // initial output to files
         cma.writeToDefaultFilesHeaders(0); // 0 == overwrites old files
@@ -100,21 +104,21 @@ public class CMAMarioSolver {
 
             // --- core iteration step ---
             double[][] pop = cma.samplePopulation(); // get a new population of solutions
-            for (int i = 0; i < pop.length; ++i) {    // for each candidate solution i
+            for (int i = 0; i < pop.length; ++i) { // for each candidate solution i
                 // a simple way to handle constraints that define a convex feasible domain
                 // (like box constraints, i.e. variable boundaries) via "blind re-sampling"
                 // assumes that the feasible domain is convex, the optimum is
-                while (!fitFun.isFeasible(pop[i])) {    //   not located on (or very close to) the domain boundary,
+                while (!fitFun.isFeasible(pop[i])) { // not located on (or very close to) the domain boundary,
                     System.out.println(DEBUG_MSG + "Not in feasible domain. Will resample once.");
-                    pop[i] = cma.resampleSingle(i);    //   initialX is feasible and initialStandardDeviations are
-                    //   sufficiently small to prevent quasi-infinite looping here
+                    pop[i] = cma.resampleSingle(i); // initialX is feasible and initialStandardDeviations are
+                    // sufficiently small to prevent quasi-infinite looping here
                     // compute fitness/objective value
                 }
                 fitness[i] = fitFun.valueOf(pop[i]); // fitfun.valueOf() is to be minimized
                 System.out.println(fitness[i]);
-                print_line.println(Arrays.toString(pop[i])+ " : " + fitness[i]);
+                print_line.println(Arrays.toString(pop[i]) + " : " + fitness[i]);
             }
-            cma.updateDistribution(fitness);         // pass fitness array to update search distribution
+            cma.updateDistribution(fitness); // pass fitness array to update search distribution
             // --- end core iteration step ---
 
             // output to files and console
@@ -128,7 +132,8 @@ public class CMAMarioSolver {
             }
         }
         // evaluate mean value as it is the best estimator for the optimum
-        // cma.setFitnessOfMeanX(fitFun.valueOf(cma.getMeanX())); // updates the best ever solution
+        // cma.setFitnessOfMeanX(fitFun.valueOf(cma.getMeanX())); // updates the best
+        // ever solution
 
         // final output
         cma.writeToDefaultFiles(1);
@@ -144,11 +149,8 @@ public class CMAMarioSolver {
         // return cma.getBestX();
         cma.setFitnessOfMeanX(fitFun.valueOf(cma.getMeanX())); // updates the best ever solution
         return cma.getBestX();
-        //return cma.getBestRecentX();
+        // return cma.getBestRecentX();
 
     }
 
-
-
 }
-

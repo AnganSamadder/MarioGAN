@@ -26,25 +26,33 @@ public class MarioProcess extends Comm {
      */
     public void launchMario() {
     	String[] options = new String[] {""};
-    	launchMario(options, false);
+    	// Launch with default options, non-human player, and visuals enabled
+    	launchMario(options, false, true); 
     }
  
     /**
      * This version of launching Mario allows for several parameters
      * @param options General command line options (currently not really used)
      * @param humanPlayer Whether a human is playing rather than a bot
+     * @param visuals Whether to create the visualization window
      */
-    public void launchMario(String[] options, boolean humanPlayer) {
+    public void launchMario(String[] options, boolean humanPlayer, boolean visuals) {
         this.evaluationOptions = new CmdLineOptions(options);  // if none options mentioned, all defaults are used.
         // set agents
         createAgentsPool(humanPlayer);
         // Short time for evolution, but more for human
         if(!humanPlayer) evaluationOptions.setTimeLimit(20);
         // TODO: Make these configurable from commandline?
-        evaluationOptions.setMaxFPS(!humanPlayer); // Slow for human players, fast otherwise
-        evaluationOptions.setVisualization(true); // Set true to watch evaluations
-        // Create Mario Component
-        ToolsConfigurator.CreateMarioComponentFrame(evaluationOptions);
+        evaluationOptions.setMaxFPS(visuals ? !humanPlayer : true); // Slow for human players only if visuals enabled, fast otherwise
+        evaluationOptions.setVisualization(visuals); // Only visualize if requested
+        // If visuals are enabled, create the frame (which also creates the component instance).
+        // If visuals are disabled, ensure the component instance is created without the frame.
+        if (visuals) {
+            ToolsConfigurator.CreateMarioComponentFrame(evaluationOptions);
+        } else {
+            // Ensure the component is created/initialized for the simulator, but without the frame
+            ToolsConfigurator.createMarioComponentInstance(); 
+        }
         evaluationOptions.setAgent(AgentsPool.getCurrentAgent());
         System.out.println(evaluationOptions.getAgent().getClass().getName());
         // set simulator
@@ -87,7 +95,8 @@ public class MarioProcess extends Comm {
 
     @Override
     public void start() {
-        this.launchMario();
+        // Default start() maintains original behavior (launch with visuals)
+        this.launchMario(); // This now calls the version with visuals = true by default
     }
 
     @Override

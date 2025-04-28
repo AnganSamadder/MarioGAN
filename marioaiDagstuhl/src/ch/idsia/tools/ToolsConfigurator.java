@@ -94,12 +94,16 @@ public class ToolsConfigurator extends JFrame
     {
 //        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 //        frame.setLocation((screenSize.width-frame.getWidth())/2, (screenSize.height-frame.getHeight())/2);        
-        if (marioComponentFrame == null)
+        // Ensure the MarioComponent instance exists first
+        MarioComponent mc = createMarioComponentInstance();
+
+        // Now, only create the JFrame if it doesn't exist and visuals are presumably intended
+        // (This method implies visuals are intended, the check is in MarioProcess now)
+        if (marioComponentFrame == null) 
         {
             marioComponentFrame = new JFrame(/*evaluationOptions.getAgentName() +*/ "Mario Intelligent 2.0");
-            marioComponent = new MarioComponent(320, 240);
-            marioComponentFrame.setContentPane(marioComponent);
-            marioComponent.init();
+            // Use the already created/initialized component
+            marioComponentFrame.setContentPane(mc); 
             marioComponentFrame.pack();
             marioComponentFrame.setResizable(false);
             marioComponentFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -509,5 +513,15 @@ public class ToolsConfigurator extends JFrame
         LabelConsole.setText("Console got message:");
         LOGGER.println("\nConsole got message:\n" + text, LOGGER.VERBOSE_MODE.INFO);
 //        TextFieldConsole.setText(text);
+    }
+
+    // New method to create and initialize the MarioComponent instance
+    public static MarioComponent createMarioComponentInstance() {
+        if (marioComponent == null)
+        {
+            marioComponent = new MarioComponent(320, 240);
+            marioComponent.init();
+        }
+        return marioComponent;
     }
 }

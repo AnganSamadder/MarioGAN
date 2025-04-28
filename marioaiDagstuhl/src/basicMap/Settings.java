@@ -16,13 +16,18 @@ public class Settings {
     public static final boolean ACCESSIBLE = true;
 
     public static final String CMD_SEPARATOR = " ";
-    public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
-    public static final String WASSERSTEIN_GAN = "samples" + File.separator + "netG_epoch_100_0_32.pth";
+    // Paths relative to the marioaiDagstuhl execution directory
+    public static final String WASSERSTEIN_PATH = ".." + File.separator + "pytorch" + File.separator
+            + "generator_ws.py";
+    public static final String WASSERSTEIN_GAN = ".." + File.separator + "samples" + File.separator
+            + "netG_epoch_100_0_32.pth";
     public static final String GAN_DIM = "32";
 
     // Jacob: IMPORTANT! This is a system-specific path that I had to set.
     // public static String PYTHON_PROGRAM = "/anaconda/bin/python";
-    public static String PYTHON_PROGRAM = "/usr/bin/python";
+    // public static String PYTHON_PROGRAM = "/usr/bin/python";
+    // Use the specific venv path
+    public static String PYTHON_PROGRAM = "/home/Angan/MarioGAN/venv/bin/python3";
 
     public static void printWarnMsg(String msg) {
         System.out.println(WARN_MSG + msg);
@@ -41,14 +46,19 @@ public class Settings {
     }
 
     public static void setPythonProgram() {
-        try {
-            Settings.PYTHON_PROGRAM = Files.readAllLines(Paths.get("my_python_path.txt")).get(0); // Should only have
-                                                                                                  // one line, get first
-        } catch (IOException e) {
-            printErrorMsg(
-                    "Can not find the my_python_path.txt which specifies the python program and locates under DagstuhlGAN.");
-            e.printStackTrace();
-        }
+        // try {
+        // Settings.PYTHON_PROGRAM =
+        // Files.readAllLines(Paths.get("my_python_path.txt")).get(0); // Should only
+        // have
+        // // one line, get first
+        // } catch (IOException e) {
+        // printErrorMsg(
+        // "Can not find the my_python_path.txt which specifies the python program and
+        // locates under DagstuhlGAN.");
+        // e.printStackTrace();
+        // }
+        // Print the path being used for confirmation
+        printInfoMsg("Using Python program: " + Settings.PYTHON_PROGRAM);
     }
 
 }
