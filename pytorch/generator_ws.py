@@ -1,6 +1,7 @@
 # This generator program expands a low-dimentional latent vector into a 2D array of tiles.
 # Each line of input should be an array of z vectors (which are themselves arrays of floats -1 to 1)
 # Each line of output is an array of 32 levels (which are arrays-of-arrays of integer tile ids)
+import os
 
 import torch
 import torchvision.utils as vutils
@@ -10,7 +11,7 @@ import sys
 import json
 import numpy
 import models.dcgan as dcgan
-#import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt # Uncomment if testing section is re-enabled and needs plt
 import math
 
 import random
@@ -28,30 +29,33 @@ def combine_images(generated_images):
     return image
 
 if __name__ == '__main__':
+ script_dir = os.path.dirname(os.path.abspath(__file__))
  # Since the Java program is not launched from the pytorch directory,
  # it cannot find this file when it is specified as being in the current
  # working directory. This is why the network has to be a command line
  # parameter. However, this model should load by default if no parameter
  # is provided.
  if len(sys.argv) ==1:
- 	modelToLoad = "netG_epoch_5000.pth"
+  default_model_name = "netG_epoch_5000.pth"
+  modelToLoad = os.path.join(script_dir, default_model_name)
  else:
- 	modelToLoad = sys.argv[1]
+  modelToLoad = sys.argv[1]
  if len(sys.argv) >=3:
- 	nz = int(sys.argv[2])
+  nz = int(sys.argv[2])
  else:
- 	nz = 32
+  nz = 32 # Default latent vector size if not provided
 
 
- batchSize = 1
- #nz = 10 #Dimensionality of latent vector
+ batchSize = 1 # Process one latent vector at a time from Java
 
+ # Model parameters (ensure these match the parameters used when netG_epoch_5000.pth was trained/saved)
  imageSize = 32
  ngf = 64
- ngpu = 1
+ ngpu = 1 # Set to 0 if you want to force CPU, otherwise >0 for GPU (if available)
  n_extra_layers = 0
- z_dims = 10 #number different titles
+ z_dims = 10 # Number of different tile types (output channels)
 
+ # --- Instantiate the Generator ---
  generator = dcgan.DCGAN_G(imageSize, nz, z_dims, ngf, ngpu, n_extra_layers)
  #generator.load_state_dict(torch.load('netG_epoch_24.pth', map_location=lambda storage, loc: storage))
  generator.load_state_dict(torch.load(modelToLoad, map_location=lambda storage, loc: storage))
