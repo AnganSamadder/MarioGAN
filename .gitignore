@@ -122,3 +122,5 @@ timeline*.txt
 fake_sample.png
 *.properties
 sources.txt
+
+*.class
