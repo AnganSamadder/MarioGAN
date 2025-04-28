@@ -28,21 +28,41 @@ public class MarioEvalFunction implements IObjectiveFunction {
 	// see cma.options.stopFitness
 	static double floor = 0.0;
 
+	// Default constructor now initializes Mario process
 	public MarioEvalFunction() throws IOException {
+		this(true); // Call the parameterized constructor
+	}
+
+	// Parameterized constructor to control Mario process initialization
+	public MarioEvalFunction(boolean initializeMarioProcess) throws IOException {
 		// set up process for GAN
 		ganProcess = new GANProcess();
 		ganProcess.start();
-		// set up mario game
-		marioProcess = new MarioProcess();
-		marioProcess.start();        
-		// consume all start-up messages that are not data responses
+		
+		// Conditionally set up mario game process
+		if (initializeMarioProcess) {
+			marioProcess = new MarioProcess();
+			marioProcess.start();
+		}
+
+		// consume all start-up messages that are not data responses from GAN
 		String response = "";
-		while(!response.equals("READY")) {
-			response = ganProcess.commRecv();
+		// Check ganProcess is not null before reading
+		if (ganProcess != null) {
+			while (!response.equals("READY")) {
+				response = ganProcess.commRecv();
+				if (response == null) { // Add null check for safety
+					System.err.println("Error: Received null response from GAN process during startup.");
+					break; 
+				}
+			}
+		} else {
+			System.err.println("Error: GAN process not initialized.");
 		}
 	}
-        
-        public MarioEvalFunction(String GANPath, String GANDim) throws IOException {
+
+    // Constructor with GANPath and GANDim, assumes Mario process is needed
+    public MarioEvalFunction(String GANPath, String GANDim) throws IOException {
 		// set up process for GAN
 		ganProcess = new GANProcess(GANPath, GANDim);
 		ganProcess.start();
@@ -51,8 +71,17 @@ public class MarioEvalFunction implements IObjectiveFunction {
 		marioProcess.start();        
 		// consume all start-up messages that are not data responses
 		String response = "";
-		while(!response.equals("READY")) {
-			response = ganProcess.commRecv();
+		// Check ganProcess is not null before reading
+		if (ganProcess != null) {
+			while (!response.equals("READY")) {
+				response = ganProcess.commRecv();
+				if (response == null) { // Add null check for safety
+					System.err.println("Error: Received null response from GAN process during startup.");
+					break; 
+				}
+			}
+		} else {
+			System.err.println("Error: GAN process not initialized.");
 		}
 	}
 
@@ -114,12 +143,16 @@ public class MarioEvalFunction implements IObjectiveFunction {
 	
 	/**
 	 * Gets objective score for single latent vector.
+	 * NOTE: This method will fail if MarioProcess was not initialized.
 	 */
 	@Override
 	public double valueOf(double[] x) {
 		try {
 			Level level = levelFromLatentVector(x);
 			// Do a simulation
+			if (marioProcess == null) {
+				throw new IllegalStateException("Cannot evaluate fitness without an initialized MarioProcess.");
+			}
 			EvaluationInfo info = this.marioProcess.simulateOneLevel(level);
 			// Fitness is negative since CMA-ES tries to minimize
                         //System.out.println("done");
@@ -141,6 +174,9 @@ public class MarioEvalFunction implements IObjectiveFunction {
 			e.printStackTrace();
 			System.exit(1);
 			return Double.NaN;
+		} catch (IllegalStateException e) {
+			System.err.println(e.getMessage());
+			return Double.NaN; // Or appropriate error handling
 		}
 	}
 

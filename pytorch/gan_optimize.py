@@ -14,6 +14,8 @@ import cma
 import random
 import math
 import matplotlib.pyplot as plt
+import os
+import re
 
 batchSize = 64
 nz = 32  # Dimensionality of latent vector
@@ -25,8 +27,31 @@ n_extra_layers = 0
 
 features = 10
 
+# --- Find the best model ---
+checkpoint_dir = '.' # Assuming checkpoints are in the same dir as the script
+best_epoch = -1
+best_model_path = None
+model_pattern = re.compile(r"netG_epoch_(\d+)\.pth$")
+
+for filename in os.listdir(checkpoint_dir):
+    match = model_pattern.match(filename)
+    if match:
+        epoch = int(match.group(1))
+        if epoch > best_epoch:
+            best_epoch = epoch
+            best_model_path = os.path.join(checkpoint_dir, filename)
+
+if best_model_path:
+    print(f"Loading best model: {best_model_path}")
+    generator_path = best_model_path
+else:
+    # Fallback or raise error if no model found
+    print("Warning: No netG_epoch_*.pth found. Falling back to default or potentially erroring.")
+    generator_path = 'netG_epoch_5000.pth' # Or raise an error: raise FileNotFoundError("No suitable generator model found.")
+
+# --- Load the model ---
 generator = dcgan.DCGAN_G(imageSize, nz, features, ngf, ngpu, n_extra_layers)
-generator.load_state_dict(torch.load('netG_epoch_5000.pth', map_location=lambda storage, loc: storage))
+generator.load_state_dict(torch.load(generator_path, map_location=lambda storage, loc: storage))
 
 
 

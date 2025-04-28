@@ -16,13 +16,13 @@ public class Settings {
     public static final boolean ACCESSIBLE = true;
 
     public static final String CMD_SEPARATOR = " ";
-	public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
-	public static final String WASSERSTEIN_GAN = "pytorch" + File.separator + "netG_epoch_5000.pth";
-        public static final String GAN_DIM = "32";
-	
-	// Jacob: IMPORTANT! This is a system-specific path that I had to set.
-	//public static String PYTHON_PROGRAM = "/anaconda/bin/python";
-	public static String PYTHON_PROGRAM = "/usr/bin/python";
+    public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
+    public static final String WASSERSTEIN_GAN = "samples" + File.separator + "netG_epoch_100_0_32.pth";
+    public static final String GAN_DIM = "32";
+
+    // Jacob: IMPORTANT! This is a system-specific path that I had to set.
+    // public static String PYTHON_PROGRAM = "/anaconda/bin/python";
+    public static String PYTHON_PROGRAM = "/usr/bin/python";
 
     public static void printWarnMsg(String msg) {
         System.out.println(WARN_MSG + msg);
@@ -40,12 +40,13 @@ public class Settings {
         System.out.println(ERROR_MSG + msg);
     }
 
-
     public static void setPythonProgram() {
         try {
-            Settings.PYTHON_PROGRAM = Files.readAllLines(Paths.get("my_python_path.txt")).get(0); // Should only have one line, get first
+            Settings.PYTHON_PROGRAM = Files.readAllLines(Paths.get("my_python_path.txt")).get(0); // Should only have
+                                                                                                  // one line, get first
         } catch (IOException e) {
-            printErrorMsg("Can not find the my_python_path.txt which specifies the python program and locates under DagstuhlGAN.");
+            printErrorMsg(
+                    "Can not find the my_python_path.txt which specifies the python program and locates under DagstuhlGAN.");
             e.printStackTrace();
         }
     }
