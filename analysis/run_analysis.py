@@ -9,32 +9,51 @@ from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def parse_stats_output(output: str) -> dict:
-    """Parses the Key: Value output of analyze_level.py into a dictionary, ignoring other lines."""
+    """Parses the Key: Value output of MarioLevelViewer.java into a dictionary."""
     stats = {}
     # Regex to find lines starting with a word, followed by ':', then the value
+    # Updated to capture AStarResult which might have non-numeric values
     pattern = re.compile(r"^([A-Za-z]+)\s*:\s*(.*)$") 
     for line in output.strip().split('\n'):
         match = pattern.match(line.strip())
         if match:
             key = match.group(1).strip()
             value_str = match.group(2).strip()
-            try:
-                # Attempt to convert to float or int
-                if '.' in value_str:
-                    stats[key] = float(value_str)
-                else:
-                    stats[key] = int(value_str)
-            except ValueError:
-                stats[key] = value_str # Keep as string if conversion fails
+            if key == 'AStarResult':
+                stats[key] = value_str # Keep as string ("Win", "Loss", etc.)
+            else:
+                try:
+                    # Attempt to convert other stats to float or int
+                    if '.' in value_str:
+                        stats[key] = float(value_str)
+                    else:
+                        stats[key] = int(value_str)
+                except ValueError:
+                    stats[key] = value_str # Keep as string if conversion fails
     return stats
 
-def run_single_analysis(analyze_script_path, project_root, no_save, run_index):
+def run_single_analysis(analyze_script_path, project_root, no_save, run_index, checkpoint_path=None):
     """Runs a single instance of analyze_level.py and returns parsed stats."""
     try:
-        # Construct command for analyze_level.py
-        command = [sys.executable, analyze_script_path]
+        # Construct the path to the python executable within the virtual environment
+        venv_python_executable = os.path.join(project_root, 'venv', 'bin', 'python3')
+        
+        # Check if the venv python executable exists
+        if not os.path.exists(venv_python_executable):
+             # Fallback to sys.executable if venv python isn't found, but print a warning
+             # This might happen if the script is run without activating the venv, 
+             # though ideally it should be run with the venv active.
+             tqdm.write(f"Warning: Virtual environment python not found at {venv_python_executable}. Falling back to {sys.executable}.", file=sys.stderr)
+             python_executable = sys.executable
+        else:
+             python_executable = venv_python_executable
+             
+        # Construct command for analyze_level.py using the determined python executable
+        command = [python_executable, analyze_script_path]
         if no_save:
             command.append("--no-save")
+        if checkpoint_path: # Check if checkpoint_path is not None
+            command.extend(["--checkpoint", checkpoint_path]) # Pass checkpoint path
 
         # Run analyze_level.py. Note: It handles its own Java interaction.
         # We capture stdout to get the stats.
@@ -42,34 +61,49 @@ def run_single_analysis(analyze_script_path, project_root, no_save, run_index):
                                 cwd=project_root, # Run from project root like before
                                 check=True, 
                                 capture_output=True, 
-                                text=True)
+                                text=True,
+                                env=os.environ.copy()) # Pass the current environment
         
         # Parse the output
         run_stats = parse_stats_output(result.stdout)
         
-        # Check if parsing seemed successful (check for a key)
-        if 'LevelValidPipePercentage' in run_stats:
+        # --- DEBUGGING --- 
+        # if run_stats: # Removed debug print
+        #     lw_val = run_stats.get('LevelWidth')
+        #     bp_val = run_stats.get('BrokenPipes')
+        #     tqdm.write(f"DEBUG Run {run_index + 1}: LevelWidth={lw_val} (Type: {type(lw_val)}), BrokenPipes={bp_val} (Type: {type(bp_val)})")
+        # else:
+        #     tqdm.write(f"DEBUG Run {run_index + 1}: run_stats is None")
+        # --- END DEBUGGING ---
+
+        # Check if parsing seemed successful (check for essential keys)
+        if 'LevelWidth' in run_stats: 
             return run_stats # Success
         else:
              # Use tqdm.write for messages within the progress bar context
-             tqdm.write(f"Warning: Could not parse stats from run {run_index + 1}. Output:\n{result.stdout}")
+             tqdm.write(f"Warning: Could not parse expected stats from run {run_index + 1}. Output:\n{result.stdout}")
              # Print stderr from the analyze script if any
              if result.stderr:
-                 tqdm.write(f"--- analyze_level.py stderr (Run {run_index + 1}) ---", file=sys.stderr)
-                 tqdm.write(result.stderr, file=sys.stderr)
-                 tqdm.write("-----------------------------------------", file=sys.stderr)
+                 tqdm.write(f"--- analyze_level.py stderr (Run {run_index + 1}) ---")
+                 tqdm.write(result.stderr)
+                 tqdm.write("-----------------------------------------")
              return None # Indicate failure
 
     except subprocess.CalledProcessError as e:
         tqdm.write(f"Error during analysis run {run_index + 1}: {e}", file=sys.stderr)
         tqdm.write(f"Stdout:\n{e.stdout}", file=sys.stderr)
-        tqdm.write(f"Stderr:\n{e.stderr}", file=sys.stderr)
+        tqdm.write(f"Stderr:\\n{e.stderr}", file=sys.stderr)
+        # Also log the command that failed
+        tqdm.write(f"Failed command: {' '.join(e.cmd)}", file=sys.stderr)
         return None # Indicate failure
     except Exception as e:
         tqdm.write(f"An unexpected error occurred during run {run_index + 1}: {e}", file=sys.stderr)
+        # Log the command if available in the exception context (might not always be)
+        # if hasattr(e, 'cmd'):
+        #     tqdm.write(f"Command context (if available): {' '.join(e.cmd)}", file=sys.stderr)
         return None # Indicate failure
 
-def main(num_runs: int, no_save: bool, cores_arg: str):
+def main(num_runs: int, no_save: bool, cores_arg: str, checkpoint_path: str = None):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     analyze_script_path = os.path.join(script_dir, 'analyze_level.py')
@@ -109,7 +143,7 @@ def main(num_runs: int, no_save: bool, cores_arg: str):
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         # Submit all analysis tasks
         for i in range(num_runs):
-            futures.append(executor.submit(run_single_analysis, analyze_script_path, project_root, no_save, i))
+            futures.append(executor.submit(run_single_analysis, analyze_script_path, project_root, no_save, i, checkpoint_path))
 
         # Process results as they complete, showing progress with tqdm
         for future in tqdm(as_completed(futures), total=num_runs, desc="Analyzing Levels"):
@@ -128,6 +162,12 @@ def main(num_runs: int, no_save: bool, cores_arg: str):
 
     # --- Calculate Aggregate Statistics ---
     print("\n--- Aggregate Statistics --- ")
+
+    # A* Completable Stats (Moved to top)
+    # --- Removed A* completable calculation and printing ---
+    # total_astar_wins = sum(all_stats.get('AStarCompletable', [0]))
+    # percentage_completable = (total_astar_wins / successful_runs) * 100.0 if successful_runs > 0 else 0.0
+    # print(f"Percentage of Completable Levels: {percentage_completable:.2f}%")
     
     # Pipe Stats
     total_pipes_all_runs = sum(all_stats.get('TotalPipes', [0]))
@@ -142,15 +182,16 @@ def main(num_runs: int, no_save: bool, cores_arg: str):
     percentage_levels_with_broken_pipes = (levels_with_broken_pipes / successful_runs) * 100.0
     print(f"Percentage of Levels with Broken Pipes: {percentage_levels_with_broken_pipes:.2f}%")
 
-    # Floating Pipe Stats (Added)
-    total_pipes_with_bottom_all_runs = sum(all_stats.get('PipesWithBottom', [0]))
+    # Floating Pipe Stats
+    # Using TotalPipes as the denominator since PipesWithBottom is not available
     total_floating_pipes_all_runs = sum(all_stats.get('FloatingPipes', [0]))
-    if total_pipes_with_bottom_all_runs > 0:
-        overall_pipe_floating_percentage = (total_floating_pipes_all_runs / total_pipes_with_bottom_all_runs) * 100.0
+    # total_pipes_all_runs is already calculated above for the broken pipe percentage
+    if total_pipes_all_runs > 0:
+        overall_pipe_floating_percentage = (total_floating_pipes_all_runs / total_pipes_all_runs) * 100.0
     else:
-        # If no pipes have a bottom section, floating percentage is 0% (or undefined, 0 is safer)
+        # If no pipes exist at all, floating percentage is 0%
         overall_pipe_floating_percentage = 0.0
-    print(f"Overall Pipe Floating Percentage (TotalFloating/TotalPipesWithBottom): {overall_pipe_floating_percentage:.2f}%")
+    print(f"Overall Pipe Floating Percentage (TotalFloating/TotalPipes): {overall_pipe_floating_percentage:.2f}%") # Updated description
     
     levels_with_floating_pipes = sum(all_stats.get('LevelHasFloatingPipe', [0]))
     percentage_levels_with_floating_pipes = (levels_with_floating_pipes / successful_runs) * 100.0
@@ -173,10 +214,9 @@ def main(num_runs: int, no_save: bool, cores_arg: str):
     # Calculate averages for numerical stats
     for key, values in all_stats.items():
         # Skip helper keys and derived aggregate percentages
-        # Keep FloatingEnemies here as the aggregate % is printed above.
-        # Keep GroundedPipePercentage as well.
+        # Removed AStarResult and AStarCompletable from skip list
         if key in {'LevelHasBrokenPipe', 'LevelHasFloatingEnemy', 'LevelValidPipePercentage', 
-                   'FloatingEnemies', 'LevelHasFloatingPipe', 'GroundedPipePercentage'}: 
+                   'FloatingEnemies', 'LevelHasFloatingPipe', 'GroundedPipePercentage'}:
             continue 
             
         if values and isinstance(values[0], (int, float)):
@@ -194,6 +234,8 @@ if __name__ == "__main__":
                         help="Number of CPU cores to use (e.g., 4) or 'all' to use all available cores (default: 8)")
     parser.add_argument("--no-save", action="store_true", 
                         help="Prevent saving level images and text files.")
+    parser.add_argument("--checkpoint", type=str, default=None,
+                        help="Path to the generator .pth checkpoint file to use.") 
     
     args = parser.parse_args()
 
@@ -203,7 +245,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Pass the cores argument to main
-    main(args.num_runs, args.no_save, args.cores)
+    main(args.num_runs, args.no_save, args.cores, args.checkpoint)
 
     # # Default to 3 runs, but allow command line argument
     # runs = 3 
