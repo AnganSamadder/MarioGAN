@@ -16,8 +16,23 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
+import java.io.InputStream;
+import java.io.DataInputStream;
+import java.util.Queue;
+import java.util.LinkedList;
+import java.io.FileInputStream;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.Arrays;
 
 import javax.imageio.ImageIO;
+
+// Imports for A* simulation
+import ch.idsia.ai.agents.Agent;
+import ch.idsia.tools.EvaluationInfo;
+import ch.idsia.tools.Evaluator;
+import ch.idsia.mario.engine.sprites.Mario; // Needed for STATUS_WIN
+import competition.icegic.robin.AStarAgent; // Assuming this is the correct path
 
 import basicMap.Settings;
 import ch.idsia.ai.tasks.ProgressTask;
@@ -30,395 +45,550 @@ import cmatest.MarioEvalFunction;
 import reader.JsonReader;
 
 /**
- * This file allows you to generate a level image for any latent vector
- * or your choice. The vector must have a length of 32 numbers separated
- * by commas enclosed in square brackets [ ]. For example,
- * [0.9881835842209917, -0.9986077315374948, 0.9995512051242508,
- * 0.9998643432807639, -0.9976165917284504, -0.9995247114230822,
- * -0.9997001909358728, 0.9995694511739592, -0.9431036754879115,
- * 0.9998155541290887, 0.9997863689962382, -0.8761392912669269,
- * -0.999843833016589, 0.9993230720045649, 0.9995470247917402,
- * -0.9998847606084427, -0.9998322053148382, 0.9997707200294411,
- * -0.9998905141832997, -0.9999512510490688, -0.9533512808031753,
- * 0.9997703088007039, -0.9992229823819915, 0.9953917828622341,
- * 0.9973473366437476, 0.9943030781608361, 0.9995290290713732,
- * -0.9994945079679955, 0.9997109900652238, -0.9988379572928884,
- * 0.9995070647543864, 0.9994132207570211]
- * 
+ * Generates level images and optionally runs simulations or analysis.
+ * Can be controlled via command-line arguments.
  */
 public class MarioLevelViewer {
 
 	public static final int BLOCK_SIZE = 16;
 	public static final int LEVEL_HEIGHT = 14;
-	// Pipe tile constants (from LevelParser)
+
+	// Tile constants (derived from LevelParser or common usage)
 	public static final byte PIPE_TOP_LEFT = 10;
 	public static final byte PIPE_TOP_RIGHT = 11;
 	public static final byte PIPE_LEFT = 26;
 	public static final byte PIPE_RIGHT = 27;
 	public static final byte EMPTY_TILE = 0;
-	// Add other tile constants if needed for more stats
 	public static final byte GROUND = 9;
 	public static final byte BREAKABLE = 16;
 	public static final byte QUESTION = 21;
+	public static final byte GOOMBA = (byte) 80; // Example enemy ID
+	// Add other enemy IDs if needed: WINGED_GOOMBA = (byte) 95, etc.
+	public static final Set<Byte> ENEMY_TILES = new HashSet<>(Arrays.asList(GOOMBA));
+	// Define blocking tiles for covered pipe check
+	public static final Set<Byte> BLOCKING_TILES = new HashSet<>(Arrays.asList(
+			GROUND, BREAKABLE, QUESTION // Add any other solid, non-passable blocks here
+	));
 
 	/**
-	 * Return an image of the level, excluding
-	 * the background, Mario, and enemy sprites.
+	 * Renders an image of the level structure (tiles).
 	 * 
-	 * @param level
-	 * @return
+	 * @param level               The Level object.
+	 * @param excludeBufferRegion Whether to clip the buffer zones at the start/end.
+	 * @return A BufferedImage of the level.
 	 */
 	public static BufferedImage getLevelImage(Level level, boolean excludeBufferRegion) {
 		EvaluationOptions options = new CmdLineOptions(new String[0]);
 		ProgressTask task = new ProgressTask(options);
-		// Added to change level
 		options.setLevel(level);
 		task.setOptions(options);
 
-		int relevantWidth = (level.width - (excludeBufferRegion ? 2 * LevelParser.BUFFER_WIDTH : 0)) * BLOCK_SIZE;
-		BufferedImage image = new BufferedImage(relevantWidth, LEVEL_HEIGHT * BLOCK_SIZE, BufferedImage.TYPE_INT_RGB);
-		// Skips buffer zones at start and end of level
-		LevelRenderer.renderArea((Graphics2D) image.getGraphics(), level, 0, 0,
-				excludeBufferRegion ? LevelParser.BUFFER_WIDTH * BLOCK_SIZE : 0, 0, relevantWidth,
-				LEVEL_HEIGHT * BLOCK_SIZE);
+		int bufferWidthPixels = LevelParser.BUFFER_WIDTH * BLOCK_SIZE;
+		int startX = excludeBufferRegion ? bufferWidthPixels : 0;
+		int renderWidth = level.width * BLOCK_SIZE - (excludeBufferRegion ? 2 * bufferWidthPixels : 0);
+		int renderHeight = level.height * BLOCK_SIZE; // Use actual level height
+
+		// Ensure render width is positive
+		if (renderWidth <= 0) {
+			System.err.println(
+					"Warning: Render width is zero or negative. Level might be too small or buffer clipping too large.");
+			renderWidth = BLOCK_SIZE; // Render at least one block
+		}
+
+		BufferedImage image = new BufferedImage(renderWidth, renderHeight, BufferedImage.TYPE_INT_RGB);
+		Graphics2D g = (Graphics2D) image.getGraphics();
+
+		// Render the specified area
+		LevelRenderer.renderArea(g, level, 0, 0, startX, 0, renderWidth, renderHeight);
+		g.dispose();
 		return image;
 	}
 
 	/**
-	 * Save level as an image
+	 * Saves the rendered level image to a file.
 	 * 
-	 * @param level      Mario Level
-	 * @param name       Filename, not including jpg extension
-	 * @param clipBuffer Whether to exclude the buffer region we add to all levels
-	 * @throws IOException
+	 * @param level      The Level object.
+	 * @param filename   Base filename (e.g., "level_01"). Extension ".jpg" added
+	 *                   automatically.
+	 * @param clipBuffer Whether to exclude the buffer region.
+	 * @throws IOException If file saving fails.
 	 */
-	public static void saveLevel(Level level, String name, boolean clipBuffer) throws IOException {
+	public static void saveLevelImage(Level level, String filename, boolean clipBuffer) throws IOException {
 		BufferedImage image = getLevelImage(level, clipBuffer);
-
-		File file = new File(name + ".jpg");
+		File file = new File(filename + ".jpg");
 		ImageIO.write(image, "jpg", file);
-		System.out.println("File saved: " + file);
+		System.out.println("Level image saved: " + file.getAbsolutePath());
 	}
 
 	/**
-	 * Analyzes various features of the level, like pipes and floating enemies.
+	 * Analyzes various structural features of the level.
 	 * 
 	 * @param level The level to analyze.
-	 * @return A Map containing statistics.
+	 * @return A Map containing calculated statistics.
 	 */
 	public static Map<String, Number> analyzeLevelFeatures(Level level) {
 		Map<String, Number> stats = new HashMap<>();
 		int width = level.width;
 		int height = level.height;
 
-		int totalPipes = 0;
-		int brokenPipes = 0;
-		int pipesWithBottom = 0; // Count pipes that have at least one body segment
-		int floatingPipes = 0; // Count pipes whose bottom is over empty space
+		int totalPipeStructures = 0;
+		int brokenPipeStructures = 0;
+		int floatingPipeStructures = 0;
+		int coveredPipeStructures = 0;
 		int totalEnemies = 0;
 		int floatingEnemies = 0;
-		int groundTiles = 0;
-		int breakableTiles = 0;
-		int questionBlocks = 0;
-		int pipeTiles = 0;
 		int floorGaps = 0;
+		int totalPipeTiles = 0; // Count individual pipe tiles
 
-		Set<Point> partOfAnyPipe = new HashSet<>();
+		Set<Point> visitedPipeTiles = new HashSet<>(); // Keep track of visited tiles during BFS
 
-		// --- Pipe Analysis ---
-		for (int y = 0; y < height - 1; y++) {
-			for (int x = 0; x < width - 1; x++) {
-				byte tile = level.map[x][y];
-				Point coord = new Point(x, y);
-				int currentMaxY = -1; // Track lowest y of this specific pipe structure
-				boolean hasBody = false;
-
-				if (tile == PIPE_TOP_LEFT && !partOfAnyPipe.contains(coord)) {
-					totalPipes++;
-					currentMaxY = y; // Initial lowest point is the top
-					Set<Point> currentPipeCoords = new HashSet<>();
-					currentPipeCoords.add(coord);
-					boolean isBroken = false;
-					Point neighborCoord = new Point(x + 1, y);
-
-					if (level.map[x + 1][y] != PIPE_TOP_RIGHT) {
-						isBroken = true;
-					} else {
-						currentPipeCoords.add(neighborCoord);
-						// Check body
-						if (y + 1 >= height || level.map[x][y + 1] != PIPE_LEFT
-								|| level.map[x + 1][y + 1] != PIPE_RIGHT) {
-							isBroken = true;
-							// Still add potential coords below if they exist
-							if (y + 1 < height) {
-								currentPipeCoords.add(new Point(x, y + 1));
-								currentPipeCoords.add(new Point(x + 1, y + 1));
-								// Even if broken here, check if these were pipe parts for maxY
-								if (level.map[x][y + 1] == PIPE_LEFT || level.map[x + 1][y + 1] == PIPE_RIGHT) {
-									currentMaxY = y + 1;
-									hasBody = true;
-								}
-							}
-						} else {
-							// Valid first body segment
-							hasBody = true;
-							currentMaxY = y + 1;
-							currentPipeCoords.add(new Point(x, y + 1));
-							currentPipeCoords.add(new Point(x + 1, y + 1));
-							// Check downwards
-							int currentY = y + 2;
-							while (currentY < height) {
-								byte leftBody = level.map[x][currentY];
-								byte rightBody = level.map[x + 1][currentY];
-								boolean leftIsBody = (leftBody == PIPE_LEFT);
-								boolean rightIsBody = (rightBody == PIPE_RIGHT);
-
-								// Pipe ends if neither is a body part OR if one is body and other is non-empty,
-								// non-body
-								if ((!leftIsBody && !rightIsBody) ||
-										(leftIsBody && rightBody != EMPTY_TILE && !rightIsBody) ||
-										(rightIsBody && leftBody != EMPTY_TILE && !leftIsBody)) {
-									break;
-								}
-
-								currentPipeCoords.add(new Point(x, currentY));
-								currentPipeCoords.add(new Point(x + 1, currentY));
-								currentMaxY = currentY; // Update lowest point
-
-								// Check for inconsistencies (e.g., left without right on non-empty tile)
-								if (!((leftIsBody && rightIsBody) ||
-										(leftIsBody && rightBody == EMPTY_TILE) ||
-										(leftIsBody && rightBody == PIPE_RIGHT) || // Allow right body if left is
-																					// correct
-										(rightIsBody && leftBody == EMPTY_TILE) ||
-										(rightIsBody && leftBody == PIPE_LEFT))) { // Allow left body if right is
-																					// correct
-									isBroken = true;
-									break;
-								}
-								currentY++;
-							}
-						}
-					}
-					if (isBroken)
-						brokenPipes++;
-					partOfAnyPipe.addAll(currentPipeCoords);
-
-					// Check for floating *after* processing the whole pipe structure
-					if (hasBody) {
-						pipesWithBottom++;
-						// Check below the lowest found body part (currentMaxY)
-						if (currentMaxY + 1 < height) {
-							if (level.map[x][currentMaxY + 1] == EMPTY_TILE
-									&& level.map[x + 1][currentMaxY + 1] == EMPTY_TILE) {
-								floatingPipes++;
-							}
-						} else {
-							// Pipe reaches bottom of the level, considered floating
-							floatingPipes++;
-						}
-					}
-
-				}
-				// Check for orphaned top-right (counts as a broken pipe)
-				else if (tile == PIPE_TOP_RIGHT && !partOfAnyPipe.contains(coord)) {
-					totalPipes++;
-					brokenPipes++;
-					partOfAnyPipe.add(coord);
-					// Orphaned tops don't have a bottom and cannot float by this definition
-				}
-			}
-		}
-		// Check for orphaned body parts
-		// int orphanedBrokenIncrement = 0; // Simpler: Don't try to avoid double
-		// counting broken structures from orphans here
+		// --- Analyze Tiles and Enemies ---
 		for (int y = 0; y < height; y++) {
+			boolean floorStarted = false;
+			boolean inGap = false;
 			for (int x = 0; x < width; x++) {
 				byte tile = level.map[x][y];
-				Point coord = new Point(x, y);
-				if ((tile == PIPE_LEFT || tile == PIPE_RIGHT) && !partOfAnyPipe.contains(coord)) {
-					// An orphan body part implies *some* structure is broken.
-					// Increment brokenPipes, but be aware this might overcount if multiple orphans
-					// belong to the same conceptual broken pipe not caught by top-down check.
-					// brokenPipes++; // Let's NOT increment brokenPipes here to avoid overcounting
-					// based on previous runs. Rely on top-down check for broken count.
-					partOfAnyPipe.add(coord); // Still mark as part of *some* pipe structure
-				}
-			}
-		}
+				Point currentPoint = new Point(x, y);
 
-		// --- Enemy & Other Tile Analysis ---
-		boolean inGap = false;
-		for (int x = 0; x < width; x++) {
-			// Floor gap check
-			if (height > 0 && level.map[x][height - 1] == EMPTY_TILE) {
-				if (!inGap) {
-					floorGaps++;
-					inGap = true;
-				}
-			} else {
-				inGap = false;
-			}
-
-			for (int y = 0; y < height; y++) {
-				// Enemy check
-				if (level.spriteTemplates[x][y] != null) {
+				// Count enemy types
+				if (ENEMY_TILES.contains(level.spriteTemplates[x][y])) { // Check sprite template layer
 					totalEnemies++;
-					// Check tile below for support
-					if (y + 1 >= height || level.map[x][y + 1] == EMPTY_TILE) {
+					// Check for floating enemies (simplified: no solid block directly below)
+					if (y < height - 1) {
+						byte tileBelow = level.map[x][y + 1];
+						// Add more robust check if needed (e.g., allow standing on pipes?)
+						if (tileBelow == EMPTY_TILE) {
+							floatingEnemies++;
+						}
+					} else { // Enemy in the bottom row is considered floating
 						floatingEnemies++;
 					}
 				}
-				// Other tile counts
-				byte tile = level.map[x][y];
-				if (tile == GROUND)
-					groundTiles++;
-				else if (tile == BREAKABLE)
-					breakableTiles++;
-				else if (tile == QUESTION)
-					questionBlocks++;
-				else if (tile == PIPE_LEFT || tile == PIPE_RIGHT || tile == PIPE_TOP_LEFT || tile == PIPE_TOP_RIGHT)
-					pipeTiles++;
+
+				// Check for floor gaps (only on the bottom-most row)
+				if (y == height - 1) {
+					boolean isGroundLike = (tile == GROUND || tile == BREAKABLE); // Define what constitutes floor
+					if (isGroundLike) {
+						floorStarted = true;
+						inGap = false;
+					} else if (floorStarted && !inGap) {
+						floorGaps++;
+						inGap = true;
+					}
+				}
+
+				// --- Pipe Structure Analysis using BFS ---
+				boolean isPipeTile = (tile == PIPE_TOP_LEFT || tile == PIPE_TOP_RIGHT ||
+						tile == PIPE_LEFT || tile == PIPE_RIGHT);
+				if (isPipeTile)
+					totalPipeTiles++; // Count individual tiles
+
+				if (isPipeTile && !visitedPipeTiles.contains(currentPoint)) {
+					totalPipeStructures++;
+					Queue<Point> queue = new LinkedList<>();
+					Set<Point> currentPipeCoords = new HashSet<>();
+					boolean structureHasBody = false;
+					int structureMaxY = -1;
+					boolean structureIsCovered = false;
+					boolean structureIsFloating = true; // Assume floating initially
+					boolean structureIsBroken = false;
+
+					queue.add(currentPoint);
+					visitedPipeTiles.add(currentPoint);
+					currentPipeCoords.add(currentPoint);
+
+					// BFS traversal
+					while (!queue.isEmpty()) {
+						Point p = queue.poll();
+						int px = p.x;
+						int py = p.y;
+						byte pTile = level.map[px][py];
+
+						structureMaxY = Math.max(structureMaxY, py);
+						if (pTile == PIPE_LEFT || pTile == PIPE_RIGHT)
+							structureHasBody = true;
+
+						// Check if pipe top is covered
+						if ((pTile == PIPE_TOP_LEFT || pTile == PIPE_TOP_RIGHT) && py > 0 &&
+								BLOCKING_TILES.contains(level.map[px][py - 1])) {
+							structureIsCovered = true;
+						}
+
+						// Check for grounding (only for tiles at max Y)
+						if (py == structureMaxY && py < height - 1 &&
+								(level.map[px][py + 1] == GROUND || level.map[px][py + 1] == BREAKABLE)) {
+							structureIsFloating = false; // Found grounding
+						}
+
+						// Check neighbors for BFS
+						int[] dx = { 0, 0, 1, -1 };
+						int[] dy = { 1, -1, 0, 0 };
+						for (int i = 0; i < 4; i++) {
+							int nx = px + dx[i];
+							int ny = py + dy[i];
+							Point neighborPoint = new Point(nx, ny);
+
+							if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
+									!visitedPipeTiles.contains(neighborPoint)) {
+								byte neighborTile = level.map[nx][ny];
+								boolean neighborIsPipe = (neighborTile == PIPE_TOP_LEFT ||
+										neighborTile == PIPE_TOP_RIGHT ||
+										neighborTile == PIPE_LEFT ||
+										neighborTile == PIPE_RIGHT);
+								if (neighborIsPipe) {
+									visitedPipeTiles.add(neighborPoint);
+									currentPipeCoords.add(neighborPoint);
+									queue.add(neighborPoint);
+								}
+							}
+						}
+					} // End BFS
+
+					// --- Structure Analysis ---
+					boolean hasLeft = currentPipeCoords.stream()
+							.anyMatch(p -> level.map[p.x][p.y] == PIPE_TOP_LEFT || level.map[p.x][p.y] == PIPE_LEFT);
+					boolean hasRight = currentPipeCoords.stream()
+							.anyMatch(p -> level.map[p.x][p.y] == PIPE_TOP_RIGHT || level.map[p.x][p.y] == PIPE_RIGHT);
+					boolean hasTop = currentPipeCoords.stream().anyMatch(
+							p -> level.map[p.x][p.y] == PIPE_TOP_LEFT || level.map[p.x][p.y] == PIPE_TOP_RIGHT);
+
+					// Broken if: missing left/right pair OR has body but no top
+					structureIsBroken = !(hasLeft && hasRight) || (structureHasBody && !hasTop);
+
+					// If the structure reached the bottom row during BFS, it can't be floating.
+					if (structureMaxY == height - 1)
+						structureIsFloating = false;
+
+					if (structureIsBroken)
+						brokenPipeStructures++;
+					if (structureIsFloating)
+						floatingPipeStructures++;
+					if (structureIsCovered)
+						coveredPipeStructures++;
+				}
 			}
 		}
 
-		// Populate results map
-		stats.put("LevelWidth", width);
-		stats.put("LevelHeight", height);
-		stats.put("TotalPipes", totalPipes);
-		stats.put("BrokenPipes", brokenPipes);
-		stats.put("PipesWithBottom", pipesWithBottom); // Pipes that could potentially float
-		stats.put("FloatingPipes", floatingPipes); // Pipes confirmed floating
-		stats.put("TotalEnemies", totalEnemies);
-		stats.put("FloatingEnemies", floatingEnemies);
-		stats.put("GroundTiles", groundTiles);
-		stats.put("BreakableTiles", breakableTiles);
-		stats.put("QuestionBlocks", questionBlocks);
-		stats.put("PipeTiles", pipeTiles);
-		stats.put("FloorGaps", floorGaps);
-
-		// Derived stats
-		int groundedPipes = pipesWithBottom - floatingPipes; // Pipes with bottom that are NOT floating
-		double groundedPipePercentage = (pipesWithBottom > 0) ? ((double) groundedPipes / pipesWithBottom * 100.0)
-				: 100.0; // Default to 100% if no pipes have a bottom section
-		double levelValidPipePercentage = (totalPipes > 0) ? ((double) (totalPipes - brokenPipes) / totalPipes * 100.0)
-				: 100.0;
-		stats.put("LevelValidPipePercentage", levelValidPipePercentage);
-		stats.put("GroundedPipes", groundedPipes); // Added
-		stats.put("GroundedPipePercentage", groundedPipePercentage); // Added
-		stats.put("LevelHasBrokenPipe", (brokenPipes > 0) ? 1 : 0);
-		stats.put("LevelHasFloatingEnemy", (floatingEnemies > 0) ? 1 : 0);
-		stats.put("LevelHasFloatingPipe", (floatingPipes > 0) ? 1 : 0); // Added
+		stats.put("totalPipeStructures", totalPipeStructures);
+		stats.put("brokenPipeStructures", brokenPipeStructures);
+		stats.put("floatingPipeStructures", floatingPipeStructures);
+		stats.put("coveredPipeStructures", coveredPipeStructures);
+		stats.put("totalEnemies", totalEnemies);
+		stats.put("floatingEnemies", floatingEnemies);
+		stats.put("floorGaps", floorGaps);
+		stats.put("totalPipeTiles", totalPipeTiles); // Added stat
+		// Add other basic counts if needed
+		// stats.put("groundTiles", ...);
+		// stats.put("breakableTiles", ...);
+		// stats.put("questionBlocks", ...);
 
 		return stats;
 	}
 
+	/**
+	 * Runs an A* agent simulation on the level.
+	 * 
+	 * @param level     The Level object.
+	 * @param visualize Whether to show the simulation GUI.
+	 * @return EvaluationInfo containing simulation results (null if simulation
+	 *         fails).
+	 */
+	public static EvaluationInfo simulateLevel(Level level, boolean visualize) {
+		EvaluationOptions options = new CmdLineOptions(new String[0]);
+		options.setLevel(level);
+		options.setVisualization(visualize);
+		// options.setFPS(24); // Adjust FPS if needed
+		Agent agent = new AStarAgent(); // Use the specific A* agent
+		options.setAgent(agent);
+		Evaluator evaluator = new Evaluator(options);
+		try {
+			List<EvaluationInfo> results = evaluator.evaluate();
+			if (results != null && !results.isEmpty()) {
+				return results.get(0); // Return info from the first (and likely only) run
+			} else {
+				System.err.println("Error: Simulation failed or returned no results.");
+				return null;
+			}
+		} catch (Exception e) {
+			System.err.println("Exception during A* simulation:");
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	// --- Main Method ---
 	public static void main(String[] args) throws IOException {
-		// Check system property to control file saving
-		boolean saveFiles = Boolean.parseBoolean(System.getProperty("mariogan.savefiles", "true"));
+		// Default parameters
+		String latentVectorString = null;
+		String outputDir = "output_levels";
+		String checkpointPath = null; // No default, use MARIOGAN_CHECKPOINT or fail
+		boolean simulate = false;
+		boolean analyze = false;
+		boolean saveImage = true;
+		boolean visualizeSim = false;
+		int numLevels = 1;
+		String filenamePrefix = "level";
+		boolean clipBuffer = true;
+		Integer latentDim = null; // Auto-detect if possible
 
-		Settings.setPythonProgram();
-		MarioEvalFunction eval = new MarioEvalFunction(false);
-
-		Level level;
-		// --- Level Generation Logic (Same as before) ---
-		String strLatentVector = "";
-		String[] commandLineArgs = args; // Store original args
-
-		// Filter out the -D argument if present, before passing to level generation
-		List<String> filteredArgsList = new ArrayList<>();
-		for (String arg : args) {
-			if (!arg.startsWith("-Dmariogan.savefiles")) { // Be specific about the property
-				filteredArgsList.add(arg);
+		// Argument Parsing
+		for (int i = 0; i < args.length; i++) {
+			switch (args[i]) {
+				case "--vector":
+				case "-v":
+					if (i + 1 < args.length) {
+						latentVectorString = args[++i];
+					} else {
+						System.err.println("Error: --vector requires a string argument.");
+						return;
+					}
+					break;
+				case "--outputDir":
+				case "-o":
+					if (i + 1 < args.length) {
+						outputDir = args[++i];
+					} else {
+						System.err.println("Error: --outputDir requires a path argument.");
+						return;
+					}
+					break;
+				case "--checkpoint":
+				case "-c":
+					if (i + 1 < args.length) {
+						checkpointPath = args[++i];
+					} else {
+						System.err.println("Error: --checkpoint requires a path argument.");
+						return;
+					}
+					break;
+				case "--numLevels":
+				case "-n":
+					if (i + 1 < args.length) {
+						try {
+							numLevels = Integer.parseInt(args[++i]);
+						} catch (NumberFormatException e) {
+							System.err.println("Error: Invalid number for --numLevels.");
+							return;
+						}
+					} else {
+						System.err.println("Error: --numLevels requires an integer argument.");
+						return;
+					}
+					break;
+				case "--latentDim":
+				case "-nz":
+					if (i + 1 < args.length) {
+						try {
+							latentDim = Integer.parseInt(args[++i]);
+						} catch (NumberFormatException e) {
+							System.err.println("Error: Invalid number for --latentDim.");
+							return;
+						}
+					} else {
+						System.err.println("Error: --latentDim requires an integer argument.");
+						return;
+					}
+					break;
+				case "--prefix":
+					if (i + 1 < args.length) {
+						filenamePrefix = args[++i];
+					} else {
+						System.err.println("Error: --prefix requires a string argument.");
+						return;
+					}
+					break;
+				case "--simulate":
+					simulate = true;
+					break;
+				case "--analyze":
+					analyze = true;
+					break;
+				case "--visualizeSim":
+					visualizeSim = true;
+					break;
+				case "--noImage":
+					saveImage = false;
+					break;
+				case "--keepBuffer":
+					clipBuffer = false;
+					break;
+				default:
+					System.err.println("Unknown argument: " + args[i]);
 			}
 		}
-		String[] filteredArgs = filteredArgsList.toArray(new String[0]);
 
-		if (filteredArgs.length > 0) {
-			StringBuilder builder = new StringBuilder();
-			for (String str : filteredArgs) { // Use filtered args here
-				builder.append(str);
+		// Determine final checkpoint path
+		String finalCheckpointPath = checkpointPath; // Use CLI arg if provided
+		if (finalCheckpointPath == null) {
+			finalCheckpointPath = System.getenv("MARIOGAN_CHECKPOINT"); // Fallback to env var
+		}
+		if (finalCheckpointPath == null) {
+			System.err.println(
+					"Error: Checkpoint path must be provided via --checkpoint or MARIOGAN_CHECKPOINT env var.");
+			return;
+		}
+		if (!new File(finalCheckpointPath).exists()) {
+			System.err.println("Error: Checkpoint file not found: " + finalCheckpointPath);
+			return;
+		}
+
+		// Set environment variable for the generator script
+		// Note: This assumes the generator script reads this specific variable.
+		// If it doesn't, this won't override the script's internal default.
+		// Consider modifying the generator script or passing the path as a command-line
+		// argument.
+		// For now, we rely on the MARIOGAN_CHECKPOINT convention.
+		System.setProperty("MARIOGAN_CHECKPOINT", finalCheckpointPath);
+		System.out.println("Using Checkpoint: " + finalCheckpointPath);
+
+		// Create output directory
+		File outputDirFile = new File(outputDir);
+		if (!outputDirFile.exists()) {
+			System.out.println("Creating output directory: " + outputDirFile.getAbsolutePath());
+			if (!outputDirFile.mkdirs()) {
+				System.err.println("Error: Failed to create output directory.");
+				return;
 			}
-			strLatentVector = builder.toString();
-			// Settings.printInfoMsg("Passed vector(s): " + strLatentVector); // Suppress
-			if (strLatentVector.subSequence(0, 2).equals("[[")) {
-				// ... (multi-vector logic remains the same) ...
-				strLatentVector = strLatentVector.substring(1, strLatentVector.length() - 1);
-				String levels = "";
-				while (strLatentVector.length() > 0) {
-					int end = strLatentVector.indexOf("]") + 1;
-					String oneVector = strLatentVector.substring(0, end);
-					// System.out.println("ONE VECTOR: " + oneVector); // Suppress
-					levels += eval.stringToFromGAN(oneVector); // Use the GAN
-					strLatentVector = strLatentVector.substring(end); // discard processed vector
-					if (strLatentVector.length() > 0) {
-						levels += ",";
-						strLatentVector = strLatentVector.substring(1); // discard leading comma
-					}
+		}
+
+		// Redirect stdout to a file if needed (e.g., for simulation logs)
+		// PrintStream originalOut = System.out;
+		// PrintStream fileOut = new PrintStream(new FileOutputStream(new
+		// File(outputDir, "viewer_log.txt"), true)); // Append mode
+		// System.setOut(fileOut);
+
+		// --- Initialize Tile Behaviors (crucial!) ---
+		try {
+			InputStream is = MarioLevelViewer.class.getResourceAsStream("/ch/idsia/mario/engine/resources/tiles.dat");
+			if (is == null) {
+				File file = new File("marioaiDagstuhl/src/ch/idsia/mario/engine/resources/tiles.dat"); // Adjust path if
+																										// needed
+				if (file.exists()) {
+					is = new java.io.FileInputStream(file);
+				} else {
+					throw new IOException("Could not find tiles.dat as resource or file.");
 				}
-				levels = "[" + levels + "]"; // Put back in brackets
-				// System.out.println(levels); // Suppress
-				List<List<List<Integer>>> allLevels = JsonReader.JsonToInt(levels);
-				ArrayList<List<Integer>> oneLevel = new ArrayList<List<Integer>>();
-				for (List<Integer> row : allLevels.get(0)) {
-					oneLevel.add(new ArrayList<Integer>());
+			}
+			Level.loadBehaviors(new DataInputStream(is));
+			is.close();
+		} catch (IOException e) {
+			System.err.println("FATAL ERROR: Could not load tile behaviors: " + e.getMessage());
+			e.printStackTrace(System.err);
+			System.exit(1);
+		}
+
+		// --- Level Generation/Loading ---
+		// Initialize MarioEvalFunction only if we need to generate from GAN
+		MarioEvalFunction eval = null;
+		Level level = null;
+
+		if (latentVectorString != null) {
+			// Single vector provided
+			System.out.println("Generating level from provided latent vector: " + latentVectorString);
+			try {
+				double[] vector = JsonReader.JsonToDoubleArray(latentVectorString);
+				if (latentDim != null && latentDim != vector.length) {
+					System.err.println("Error: Provided vector length (" + vector.length
+							+ ") doesn't match --latentDim (" + latentDim + ").");
+					return;
 				}
-				for (List<List<Integer>> aLevel : allLevels) {
-					int index = 0;
-					for (List<Integer> row : aLevel) {
-						oneLevel.get(index++).addAll(row);
-					}
+				// Need MarioEvalFunction to generate the level from vector
+				eval = new MarioEvalFunction(false); // Assume visualization off for generation
+				level = eval.levelFromLatentVector(vector);
+				if (level == null) {
+					System.err.println("Error: MarioEvalFunction failed to generate level from vector.");
+					return;
 				}
-				level = LevelParser.createLevelJson(oneLevel);
-			} else {
-				double[] latentVector = JsonToDoubleArray(strLatentVector);
-				level = eval.levelFromLatentVector(latentVector);
+			} catch (Exception e) {
+				System.err.println("Error parsing or generating level from provided latent vector: " + e.getMessage());
+				return;
 			}
 		} else {
-			// System.out.println("No latent vector provided. Generating level with random
-			// vector..."); // Suppress
-			int latentDim = Integer.parseInt(Settings.GAN_DIM);
-			double[] randomLatentVector = new double[latentDim];
+			// Generate random vectors and levels
+			if (latentDim == null)
+				latentDim = 32; // Default dimension if not provided
+			System.out.println("Generating " + numLevels + " levels from random latent vector(s) with dimension "
+					+ latentDim + "...");
+			eval = new MarioEvalFunction(false); // Initialize for generation
 			Random random = new Random();
-			for (int i = 0; i < latentDim; i++) {
-				randomLatentVector[i] = random.nextGaussian();
-			}
-			// System.out.println("Generated random vector: " +
-			// java.util.Arrays.toString(randomLatentVector)); // Suppress
-			level = eval.levelFromLatentVector(randomLatentVector);
-		}
-		// --- End Level Generation ---
 
-		// Save files only if flag is set
-		if (saveFiles) {
-			try {
-				saveLevel(level, "LevelClipped", true);
-			} catch (Exception e) {
-				System.err.println("Error saving LevelClipped.jpg: " + e.getMessage());
-			}
-			try {
-				saveLevel(level, "LevelFull", false);
-			} catch (Exception e) {
-				System.err.println("Error saving LevelFull.jpg: " + e.getMessage());
-			}
-			try (PrintStream ps = new PrintStream(new FileOutputStream("level.txt"))) {
-				level.saveText(ps);
-			} catch (IOException e) {
-				System.err.println("Error saving level.txt: " + e.getMessage());
-			}
-		}
-
-		// --- Analyze and Print Stats ---
-		Map<String, Number> stats = analyzeLevelFeatures(level);
-		for (Map.Entry<String, Number> entry : stats.entrySet()) {
-			if (entry.getValue() instanceof Double) {
-				System.out.printf("%s: %.1f%n", entry.getKey(), entry.getValue());
+			// Generate multiple levels if needed
+			// For simplicity, this example focuses on processing one level,
+			// but the loop below should handle multiple if generation logic is inside the
+			// loop.
+			// We'll generate the first level here for demonstration.
+			if (numLevels > 0) {
+				double[] vector = new double[latentDim];
+				for (int j = 0; j < latentDim; j++) {
+					vector[j] = random.nextDouble() * 2 - 1; // Range [-1, 1]
+				}
+				level = eval.levelFromLatentVector(vector);
+				if (level == null) {
+					System.err.println("Error: MarioEvalFunction failed to generate level from random vector.");
+					return;
+				}
 			} else {
-				System.out.printf("%s: %d%n", entry.getKey(), entry.getValue());
+				System.err.println("Error: Number of levels to generate must be positive.");
+				return;
+			}
+			// NOTE: This currently only generates and processes the *first* random level.
+			// To process multiple random levels, the generation logic needs to be inside
+			// the loop below.
+		}
+
+		if (level == null) {
+			System.err.println("Error: Level object could not be created.");
+			return;
+		}
+
+		// --- Process Generated/Loaded Level ---
+		// This part currently processes only ONE level determined above.
+		// To process multiple, you'd loop from 0 to numLevels (if generating random)
+		// or handle multiple inputs if loading from files/multiple vectors.
+		String baseFilename = String.format("%s_%03d", filenamePrefix, 0); // Using index 0 for the single level
+		String fullPathPrefix = new File(outputDir, baseFilename).getAbsolutePath();
+		System.out.println("\n--- Processing Level 0 (" + baseFilename + ") ---");
+
+		// Save Image
+		if (saveImage) {
+			try {
+				saveLevelImage(level, fullPathPrefix, clipBuffer);
+			} catch (IOException e) {
+				System.err.println("Error saving level image: " + e.getMessage());
 			}
 		}
 
-		eval.exit();
-		System.exit(0);
+		// Analyze Features
+		if (analyze) {
+			System.out.println("Analyzing level features...");
+			Map<String, Number> stats = analyzeLevelFeatures(level);
+			System.out.println("Level Statistics:");
+			stats.forEach((key, value) -> System.out.println("  " + key + ": " + value));
+		}
+
+		// Simulate Level
+		if (simulate) {
+			System.out.println("Simulating level with A* agent..." + (visualizeSim ? " (Visualization ON)" : ""));
+			EvaluationInfo simInfo = simulateLevel(level, visualizeSim);
+			if (simInfo != null) {
+				System.out.println("Simulation Results:");
+				System.out.println("  Status: " + (simInfo.marioStatus == Mario.STATUS_WIN ? "WIN" : "LOSE/TIMEOUT"));
+				// Try distancePassed
+				System.out.println("  Distance Passed: " + simInfo.distancePassed);
+				System.out.println("  Time Left: " + simInfo.timeLeft);
+				System.out.println("  Mario Mode: " + simInfo.marioMode);
+				System.out.println("  Kills Total: " + simInfo.killsTotal);
+				// System.out.println(" Memo: " + simInfo.memo);
+			} else {
+				System.out.println("Simulation failed or produced no results.");
+			}
+		}
+
+		// Clean up MarioEvalFunction process if it was created
+		if (eval != null) {
+			eval.exit();
+		}
+
+		System.out.println("\n--- Processing Complete ---");
 	}
 }

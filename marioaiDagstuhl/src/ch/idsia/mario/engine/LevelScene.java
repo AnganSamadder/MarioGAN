@@ -11,6 +11,9 @@ import ch.idsia.utils.MathX;
 import java.awt.*;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -287,7 +290,7 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
                 obsX = 0; y < MarioYInMap + Environment.HalfObsHeight; y++, obsX++) {
             for (int x = MarioXInMap - Environment.HalfObsWidth,
                     obsY = 0; x < MarioXInMap + Environment.HalfObsWidth; x++, obsY++) {
-                if (x >= 0 /* && x <= level.xExit */ && y >= 0 && y < level.height) {
+                if (x >= 0 && x < level.width && y >= 0 && y < level.height) {
                     ret[obsX][obsY] = ZLevelMapElementGeneralization(level.map[x][y], ZLevel);
                 } else
                     ret[obsX][obsY] = 0;
@@ -568,10 +571,24 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
 
     public void init() {
         try {
-            Level.loadBehaviors(new DataInputStream(LevelScene.class.getResourceAsStream("resources/tiles.dat")));
+            // Try loading from classpath first
+            InputStream is = LevelScene.class.getResourceAsStream("/ch/idsia/mario/engine/resources/tiles.dat");
+            if (is == null) {
+                 // Fallback to file path relative to project root
+                File file = new File("marioaiDagstuhl/src/ch/idsia/mario/engine/resources/tiles.dat");
+                if (file.exists()) {
+                    is = new FileInputStream(file);
+                } else {
+                    throw new IOException("Could not load tiles.dat as resource or file.");
+                }
+            }
+            Level.loadBehaviors(new DataInputStream(is));
+            is.close();
         } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(0);
+            // Consider logging instead of exiting, or re-throwing a runtime exception
+             System.err.println("Error loading tile behaviors in LevelScene.init(): " + e.getMessage());
+             e.printStackTrace();
+             System.exit(0); // Keep original behavior for now
         }
         /*
          * if (replayer!=null)
@@ -598,7 +615,8 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
         sprites.clear();
         // Conditionally create rendering layers only if visualization is on
         // System.out.println(
-        //         "DEBUG: LevelScene.init - Checking GlobalOptions.VisualizationOn = " + GlobalOptions.VisualizationOn);
+        // "DEBUG: LevelScene.init - Checking GlobalOptions.VisualizationOn = " +
+        // GlobalOptions.VisualizationOn);
         if (GlobalOptions.VisualizationOn) {
             layer = new LevelRenderer(level, graphicsConfiguration, 320, 240);
             for (int i = 0; i < 2; i++) {
@@ -620,10 +638,24 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
 
     public void init(Level level) {
         try {
-            Level.loadBehaviors(new DataInputStream(LevelScene.class.getResourceAsStream("resources/tiles.dat")));
+            // Try loading from classpath first
+            InputStream is = LevelScene.class.getResourceAsStream("/ch/idsia/mario/engine/resources/tiles.dat");
+            if (is == null) {
+                 // Fallback to file path relative to project root
+                File file = new File("marioaiDagstuhl/src/ch/idsia/mario/engine/resources/tiles.dat");
+                if (file.exists()) {
+                    is = new FileInputStream(file);
+                } else {
+                    throw new IOException("Could not load tiles.dat as resource or file.");
+                }
+            }
+            Level.loadBehaviors(new DataInputStream(is));
+            is.close();
         } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(0);
+            // Consider logging instead of exiting, or re-throwing a runtime exception
+             System.err.println("Error loading tile behaviors in LevelScene.init(Level): " + e.getMessage());
+             e.printStackTrace();
+             System.exit(0); // Keep original behavior for now
         }
         /*
          * if (replayer!=null)
@@ -649,8 +681,9 @@ public class LevelScene extends Scene implements SpriteContext, Cloneable {
         // Sprite.spriteContext = this;
         sprites.clear();
         // Conditionally create rendering layers only if visualization is on
-        // System.out.println("DEBUG: LevelScene.init(Level) - Checking GlobalOptions.VisualizationOn = "
-        //         + GlobalOptions.VisualizationOn);
+        // System.out.println("DEBUG: LevelScene.init(Level) - Checking
+        // GlobalOptions.VisualizationOn = "
+        // + GlobalOptions.VisualizationOn);
         if (GlobalOptions.VisualizationOn) {
             layer = new LevelRenderer(level, graphicsConfiguration, 320, 240);
             for (int i = 0; i < 2; i++) {

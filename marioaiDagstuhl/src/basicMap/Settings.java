@@ -18,7 +18,7 @@ public class Settings {
     public static final String CMD_SEPARATOR = " ";
     // Paths relative to the marioaiDagstuhl execution directory -- Changed to
     // project root
-    public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
+    // public static final String WASSERSTEIN_PATH = "pytorch" + File.separator + "generator_ws.py";
     public static final String WASSERSTEIN_GAN = "samples" + File.separator + "final.pth";
     public static final String GAN_DIM = "32";
 
@@ -27,6 +27,9 @@ public class Settings {
     // public static String PYTHON_PROGRAM = "/usr/bin/python";
     // Use the specific venv path
     public static String PYTHON_PROGRAM = "/home/Angan/MarioGAN/venv/bin/python3";
+
+    public static final String MarioLevels = "../MarioLevels/marioLevels" ;
+    public static final String MarioTiles = "../MarioLevels/MarioTiles" ;
 
     public static void printWarnMsg(String msg) {
         System.out.println(WARN_MSG + msg);

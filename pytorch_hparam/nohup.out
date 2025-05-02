@@ -1,0 +1,49 @@
+usage: main.py [-h] [--nz NZ] [--ngf NGF] [--ndf NDF] [--batchSize BATCHSIZE]
+               [--niter NITER] [--lrD LRD] [--lrG LRG] [--beta1 BETA1]
+               [--cuda] [--ngpu NGPU] [--netG NETG] [--netD NETD]
+               [--clamp_lower CLAMP_LOWER] [--clamp_upper CLAMP_UPPER]
+               [--Diters DITERS] [--n_extra_layers N_EXTRA_LAYERS]
+               [--experiment EXPERIMENT] [--adam]
+main.py: error: unrecognized arguments: \
+usage: main.py [-h] [--nz NZ] [--ngf NGF] [--ndf NDF] [--batchSize BATCHSIZE]
+               [--niter NITER] [--lrD LRD] [--lrG LRG] [--beta1 BETA1]
+               [--cuda] [--ngpu NGPU] [--netG NETG] [--netD NETD]
+               [--clamp_lower CLAMP_LOWER] [--clamp_upper CLAMP_UPPER]
+               [--Diters DITERS] [--n_extra_layers N_EXTRA_LAYERS]
+               [--experiment EXPERIMENT] [--adam]
+main.py: error: unrecognized arguments: \\
+\: line 2: --cuda: command not found
+\: line 3: --niter: command not found
+\: line 4: --n_extra_layers: command not found
+\: line 5: --ngf: command not found
+\: line 6: --ndf: command not found
+\: line 7: --batchSize: command not found
+\: line 8: --experiment: command not found
+usage: main.py [-h] [--nz NZ] [--ngf NGF] [--ndf NDF] [--batchSize BATCHSIZE]
+               [--niter NITER] [--lrD LRD] [--lrG LRG] [--beta1 BETA1]
+               [--cuda] [--ngpu NGPU] [--netG NETG] [--netD NETD]
+               [--clamp_lower CLAMP_LOWER] [--clamp_upper CLAMP_UPPER]
+               [--Diters DITERS] [--n_extra_layers N_EXTRA_LAYERS]
+               [--experiment EXPERIMENT] [--adam]
+main.py: error: unrecognized arguments: \\
+\: line 2: --cuda: command not found
+\: line 3: --niter: command not found
+\: line 4: --n_extra_layers: command not found
+\: line 5: --ngf: command not found
+\: line 6: --ndf: command not found
+\: line 7: --batchSize: command not found
+\: line 8: --experiment: command not found
+usage: main.py [-h] [--nz NZ] [--ngf NGF] [--ndf NDF] [--batchSize BATCHSIZE]
+               [--niter NITER] [--lrD LRD] [--lrG LRG] [--beta1 BETA1]
+               [--cuda] [--ngpu NGPU] [--netG NETG] [--netD NETD]
+               [--clamp_lower CLAMP_LOWER] [--clamp_upper CLAMP_UPPER]
+               [--Diters DITERS] [--n_extra_layers N_EXTRA_LAYERS]
+               [--experiment EXPERIMENT] [--adam]
+main.py: error: unrecognized arguments: \\
+\: line 2: --cuda: command not found
+\: line 3: --niter: command not found
+\: line 4: --n_extra_layers: command not found
+\: line 5: --ngf: command not found
+\: line 6: --ndf: command not found
+\: line 7: --batchSize: command not found
+\: line 8: --experiment: command not found

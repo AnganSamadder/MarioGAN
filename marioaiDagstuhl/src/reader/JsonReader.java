@@ -1,150 +1,206 @@
 package reader;
 
-
 import ch.idsia.mario.engine.GlobalOptions;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonSyntaxException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- *
- * @author vv + Amy
+ * Provides utility methods for reading level data and latent vectors from JSON.
  */
 public class JsonReader {
-    private List<List<List<Integer>>> json;
-    int current;
-    
-    public JsonReader(String filename){
-        if(GlobalOptions.JsonAsString){
-            json = JsonToInt(filename);
-        }else{
-            json = JsonToIntFromFile(filename);
-        }
-        current = 0;
-    }
-    
-    public int getNumber(){
-        return json.size();
-    }
-    
-    public List<List<Integer>> getLevel(int ind){
-        return json.get(ind);
-    }
-    
-    public boolean hasNext(){
-        return current<=json.size();
-    }
-    
-    public List<List<Integer>> next(){
-        current++;
-        return json.get(current-1);
-    }
-    
-    /**
-     * Creates integer list representation of multiple levels from a json
-     * file whose path is designated by the parameter.
-     * @param fileLocation Path to json file
-     * @return List of levels: A level is a list of rows, and each integer
-     *         represents a tile/sprite type.
-     */
-    public static List<List<List<Integer>>> JsonToIntFromFile(String fileLocation)
-    {    	
-    	//array, array, array int
-    	List<String> lines = new ArrayList<String>();
-    	try 
-    	{
-    		lines = Files.readAllLines(Paths.get(fileLocation), Charset.defaultCharset());
-    	} 
-    	catch (IOException e1) 
-    	{
-    		e1.printStackTrace();
-    	}
+	private List<List<List<Integer>>> levelsJson; // Changed name for clarity
+	int currentLevelIndex;
 
-    	return JsonToIntFromFile(lines);
-    }
-
-    /**
-     * Jacob: Designed entry point into method that does not require a file,
-     * only the contents of a file
-     * @param lines Array of the individual lines within the file
-     * @return List of levels: A level is a list of rows, and each integer
-     *         represents a tile/sprite type.
-     */
-    public static List<List<List<Integer>>> JsonToIntFromFile(List<String> lines)
-    {
-        StringBuilder jsonStringBuilder = new StringBuilder(); 
-    	for(String s: lines) // Need to use StringBuilder here for efficiency
-    		jsonStringBuilder.append(s);
-    	
-    	String myJSONString=jsonStringBuilder.toString();
-    	JsonArray jarray1 = new Gson().fromJson(myJSONString, JsonArray.class);//first array
-    
-    	List<List<List<Integer>>> myReturnList = new ArrayList<List<List<Integer>>>();
-    	
-    	for(int i = 0; i < jarray1.size();i++)
-    	{
-    		List<List<Integer>> myFirstSubList = new ArrayList<List<Integer>>();
-    		JsonArray jarrayi = ((JsonArray)jarray1.get(i));
-    		for(int j = 0; j < jarrayi.size();j++)
-    		{
-    			List<Integer> mySecondSubList = new ArrayList<Integer>();
-    			JsonArray jarrayj = ((JsonArray)jarrayi.get(j));
-    			for(JsonElement je: jarrayj)
-    			{
-    				mySecondSubList.add(je.getAsInt());
-    			}
-    			myFirstSubList.add(mySecondSubList);
-    		}
-    		myReturnList.add(myFirstSubList);
-    	}	
-    	return myReturnList;
-    }
-
-
-
-    // The method above may unnecessarily duplicate some functionality of this method
-    public static List<List<List<Integer>>> JsonToInt(String myJSONString)
-    {   JsonArray jarray1 = new Gson().fromJson(myJSONString, JsonArray.class);//first array
-    
-    	List<List<List<Integer>>> myReturnList = new ArrayList<List<List<Integer>>>();
-    	
-    	for(int i = 0; i < jarray1.size();i++)
-    	{
-    		List<List<Integer>> myFirstSubList = new ArrayList<List<Integer>>();
-    		JsonArray jarrayi = ((JsonArray)jarray1.get(i));
-    	    // System.out.println(jarrayi); // Commented out - This was printing the raw level data
-    	    for(int j = 0; j < jarrayi.size();j++)
-    		{
-    			List<Integer> mySecondSubList = new ArrayList<Integer>();
-    			JsonArray jarrayj = ((JsonArray)jarrayi.get(j));
-    			for(JsonElement je: jarrayj)
-    			{
-    				mySecondSubList.add(je.getAsInt());
-    			}
-    			myFirstSubList.add(mySecondSubList);
-    		}
-    		myReturnList.add(myFirstSubList);
-    	}	
-    	return myReturnList;
-    }
-
-	public static double[] JsonToDoubleArray(String myJSONString) {
-		JsonArray jarray1 = new Gson().fromJson(myJSONString, JsonArray.class);//first array
-		List<Double> myList = new ArrayList<>();
-		for(JsonElement je: jarray1)
-		{
-			myList.add(je.getAsDouble());
+	/**
+	 * Constructor that reads level data from a file or string based on
+	 * GlobalOptions.
+	 * 
+	 * @param source Path to the JSON file or the JSON string itself.
+	 */
+	public JsonReader(String source) {
+		if (GlobalOptions.JsonAsString) {
+			levelsJson = jsonStringToIntLevels(source);
+		} else {
+			levelsJson = jsonFileToIntLevels(source);
 		}
-		double[] myArray = new double[myList.size()];
-		for (int i=0; i<myList.size(); i++) {
-			myArray[i] = myList.get(i);
-		}
-		return myArray;
+		currentLevelIndex = 0;
 	}
+
+	/**
+	 * @return The total number of levels loaded.
+	 */
+	public int getNumberOfLevels() {
+		return (levelsJson != null) ? levelsJson.size() : 0;
+	}
+
+	/**
+	 * Retrieves a specific level by its index.
+	 * 
+	 * @param index The index of the level.
+	 * @return The level data as a List<List<Integer>>, or null if index is invalid.
+	 */
+	public List<List<Integer>> getLevel(int index) {
+		if (levelsJson != null && index >= 0 && index < levelsJson.size()) {
+			return levelsJson.get(index);
+		} else {
+			System.err.println("Error: Invalid level index requested: " + index);
+			return null;
+		}
+	}
+
+	/**
+	 * @return True if there are more levels available to iterate through.
+	 */
+	public boolean hasNextLevel() {
+		return (levelsJson != null && currentLevelIndex < levelsJson.size());
+	}
+
+	/**
+	 * Retrieves the next level in the sequence and advances the iterator.
+	 * 
+	 * @return The next level data, or null if no more levels are available.
+	 */
+	public List<List<Integer>> nextLevel() {
+		if (hasNextLevel()) {
+			return levelsJson.get(currentLevelIndex++);
+		} else {
+			return null;
+		}
+	}
+
+	/**
+	 * Reads a JSON file containing multiple levels and converts it to a list of
+	 * integer levels.
+	 * Each level is represented as a List<List<Integer>>.
+	 * 
+	 * @param fileLocation Path to the JSON file.
+	 * @return List of levels, or an empty list if reading/parsing fails.
+	 */
+	public static List<List<List<Integer>>> jsonFileToIntLevels(String fileLocation) {
+		try {
+			List<String> lines = Files.readAllLines(Paths.get(fileLocation), Charset.defaultCharset());
+			StringBuilder jsonStringBuilder = new StringBuilder();
+			for (String s : lines) { // Use StringBuilder for efficiency
+				jsonStringBuilder.append(s);
+			}
+			return jsonStringToIntLevels(jsonStringBuilder.toString());
+		} catch (IOException e) {
+			System.err.println("Error reading JSON file '" + fileLocation + "': " + e.getMessage());
+			return new ArrayList<>(); // Return empty list on error
+		}
+	}
+
+	/**
+	 * Converts a JSON string representing multiple levels into a list of integer
+	 * levels.
+	 * 
+	 * @param jsonString The JSON string.
+	 * @return List of levels, or an empty list if parsing fails.
+	 */
+	public static List<List<List<Integer>>> jsonStringToIntLevels(String jsonString) {
+		List<List<List<Integer>>> levelList = new ArrayList<>();
+		if (jsonString == null || jsonString.trim().isEmpty()) {
+			System.err.println("Error: Input JSON string is null or empty.");
+			return levelList;
+		}
+
+		try {
+			JsonArray topLevelArray = new Gson().fromJson(jsonString, JsonArray.class);
+			if (topLevelArray == null) {
+				System.err.println("Error: Failed to parse top-level JSON array.");
+				return levelList;
+			}
+
+			for (JsonElement levelElement : topLevelArray) {
+				if (!levelElement.isJsonArray())
+					continue; // Skip non-array elements
+				JsonArray levelArray = levelElement.getAsJsonArray();
+				List<List<Integer>> currentLevel = new ArrayList<>();
+				for (JsonElement rowElement : levelArray) {
+					if (!rowElement.isJsonArray())
+						continue; // Skip non-array rows
+					JsonArray rowArray = rowElement.getAsJsonArray();
+					List<Integer> currentRow = new ArrayList<>();
+					for (JsonElement tileElement : rowArray) {
+						if (tileElement.isJsonPrimitive() && tileElement.getAsJsonPrimitive().isNumber()) {
+							currentRow.add(tileElement.getAsNumber().intValue());
+						} else {
+							System.err.println("Warning: Non-numeric JSON element encountered in level data: "
+									+ tileElement.toString() + ". Replacing with 0.");
+							currentRow.add(0); // Default value for non-numeric elements
+						}
+					}
+					currentLevel.add(currentRow);
+				}
+				levelList.add(currentLevel);
+			}
+		} catch (JsonSyntaxException e) {
+			System.err.println("Error parsing JSON string: " + e.getMessage());
+			// Return potentially partially parsed list or empty list
+		} catch (Exception e) { // Catch other potential runtime errors
+			System.err.println("Unexpected error processing JSON string: " + e.getMessage());
+		}
+		return levelList;
+	}
+
+	/**
+	 * Converts a JSON string representing a single array of numbers into a double
+	 * array.
+	 * 
+	 * @param jsonString The JSON string, e.g., "[1.0, -0.5, 0.0]".
+	 * @return A double array, or an empty array if parsing fails.
+	 */
+	public static double[] JsonToDoubleArray(String jsonString) {
+		if (jsonString == null || jsonString.trim().isEmpty()) {
+			System.err.println("Error: Input JSON string for double array is null or empty.");
+			return new double[0];
+		}
+		try {
+			JsonArray jsonArray = new Gson().fromJson(jsonString, JsonArray.class);
+			if (jsonArray == null) {
+				System.err.println("Error: Failed to parse JSON array for double array.");
+				return new double[0];
+			}
+			double[] doubleArray = new double[jsonArray.size()];
+			for (int i = 0; i < jsonArray.size(); i++) {
+				JsonElement element = jsonArray.get(i);
+				if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+					doubleArray[i] = element.getAsDouble();
+				} else {
+					System.err.println("Warning: Non-numeric JSON element encountered in double array: "
+							+ element.toString() + ". Replacing with 0.0.");
+					doubleArray[i] = 0.0;
+				}
+			}
+			return doubleArray;
+		} catch (JsonSyntaxException e) {
+			System.err.println("Error parsing JSON string for double array: " + e.getMessage());
+			return new double[0];
+		} catch (Exception e) {
+			System.err.println("Unexpected error processing JSON string for double array: " + e.getMessage());
+			return new double[0];
+		}
+	}
+
+	// Method previously causing errors - keep commented or remove if truly unused
+	/*
+	 * public static List<List<List<Integer>>> generateLevels(List<double[]>
+	 * latentVectors, Integer latentDim) {
+	 * System.err.
+	 * println("Error: generateLevels method is likely incorrect or deprecated.");
+	 * // This method likely needs to interact with a Python script via
+	 * MarioEvalFunction
+	 * // or similar mechanism. It cannot directly generate levels in Java.
+	 * return new ArrayList<>();
+	 * }
+	 */
 }

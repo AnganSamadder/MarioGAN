@@ -13,7 +13,7 @@ public class GANProcess extends Comm {
         super();
         this.threadName = "GANThread";
     }
-    
+
     public GANProcess(String GANPath, String GANDim) {
         super();
         this.threadName = "GANThread";
@@ -26,20 +26,35 @@ public class GANProcess extends Comm {
      */
     public void launchGAN() {
         System.out.println(PYTHON_PROGRAM);
-    	
-    		if(!(new File(PYTHON_PROGRAM).exists())) {
-    			throw new RuntimeException("Before launching this program, you need to configure Settings.PYTHON_PROGRAM " +
-    									  "to point to the correct version of Python you intend to use on your system. If " +
-    									  "using the Wasserstein GAN, this Python version must support PyTorch.");
-    		}
-    	
+
+        if (!(new File(PYTHON_PROGRAM).exists())) {
+            throw new RuntimeException("Before launching this program, you need to configure Settings.PYTHON_PROGRAM " +
+                    "to point to the correct version of Python you intend to use on your system. If " +
+                    "using the Wasserstein GAN, this Python version must support PyTorch.");
+        }
+
+        // --- Select Generator Script based on Checkpoint --- 
+        String checkpointToUse = (this.GANPath == null) ? WASSERSTEIN_GAN : this.GANPath;
+        String scriptToUse;
+        // Determine which generator script to use
+        String generatorScriptProperty = System.getProperty("mariogan.generatorScript");
+        if (generatorScriptProperty != null && !generatorScriptProperty.isEmpty()) {
+            scriptToUse = generatorScriptProperty;
+            System.out.println("[INFO] Using generator script from system property: " + scriptToUse);
+        } else {
+            // Default script path if system property is not set
+            scriptToUse = "pytorch" + File.separator + "generator_ws.py"; 
+            System.out.println("[INFO] Using DEFAULT generator script: " + scriptToUse + " for checkpoint: " + checkpointToUse);
+        }
+        // --- End Select Generator Script ---
+
         // Run program with model architecture and weights specified as parameters
         ProcessBuilder builder = null;
-        if(this.GANPath == null){
-            builder = new ProcessBuilder(PYTHON_PROGRAM, WASSERSTEIN_PATH, WASSERSTEIN_GAN, GAN_DIM);
-        }else{
-            builder = new ProcessBuilder(PYTHON_PROGRAM, WASSERSTEIN_PATH, this.GANPath, this.GANDim);
-        }
+        String dimToUse = (this.GANDim == null) ? GAN_DIM : this.GANDim;
+
+        // Use the selected scriptToUse and checkpointToUse directly
+        builder = new ProcessBuilder(PYTHON_PROGRAM, scriptToUse, checkpointToUse, dimToUse);
+
         builder.redirectError(Redirect.INHERIT); // Standard error will print to console
         	try {
         		System.out.println(builder.command());
@@ -54,7 +69,7 @@ public class GANProcess extends Comm {
      */
     @Override
     public void initBuffers() {
-        //Initialize input and output
+        // Initialize input and output
         if (this.process != null) {
             this.reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             this.writer = new PrintStream(this.process.getOutputStream());

@@ -10,6 +10,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -213,4 +215,96 @@ public class LevelParser {
         return output;
     }
 
+    /**
+     * Loads a level from a specific .txt format.
+     * Assumes format:
+     * Header:...
+     * Seperator:...
+     * Width:W
+     * Height:H
+     * Map:
+     *   0, 1, 2, ...
+     *   3, 4, 5, ...
+     * Data:
+     *   ...
+     * @param fis FileInputStream of the level.txt file.
+     * @return A new Level object.
+     * @throws IOException If reading fails.
+     * @throws NumberFormatException If width/height parsing fails.
+     * @throws RuntimeException If map data is inconsistent.
+     */
+    public static Level loadLevelFromTxt(InputStream fis) throws IOException, NumberFormatException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+        String line;
+        int width = -1;
+        int height = -1;
+        Level level = null;
+        boolean readingMap = false;
+        int currentMapRow = 0;
+
+        while ((line = reader.readLine()) != null) {
+            line = line.trim();
+            if (line.startsWith("Width:")) {
+                width = Integer.parseInt(line.substring("Width:".length()).trim());
+            } else if (line.startsWith("Height:")) {
+                height = Integer.parseInt(line.substring("Height:".length()).trim());
+            } else if (line.equals("Map:")) {
+                if (width == -1 || height == -1) {
+                    throw new IOException("Width or Height not found before Map: section in level file.");
+                }
+                // Initialize level *without* buffer for direct loading
+                // The saveText method in Level seems to save the raw map directly.
+                level = new Level(width, height);
+                readingMap = true;
+            } else if (readingMap) {
+                if (line.isEmpty() || line.startsWith("Data:")) { // Stop reading map at Data: or empty line
+                    readingMap = false;
+                    if (currentMapRow != height) {
+                         System.err.println("Warning: Read " + currentMapRow + " map rows, expected " + height);
+                         // Potentially throw error here if strictness is needed
+                    }
+                    continue; // Skip processing this line
+                }
+                if (level == null || currentMapRow >= height) {
+                    // Should not happen if logic is correct, but safety check
+                    throw new RuntimeException("Error reading map data: Level not initialized or reading past height.");
+                }
+                
+                String[] tiles = line.split(",");
+                if (tiles.length < width) {
+                     System.err.println("Warning: Row " + currentMapRow + " has " + tiles.length + " tiles, expected " + width);
+                     // Handle potentially short rows if necessary, or throw error
+                }
+
+                for (int x = 0; x < Math.min(width, tiles.length); x++) {
+                    try {
+                        // Note: level.txt seems to store raw tile bytes directly, not encoded like ASCII/JSON
+                        byte tileValue = Byte.parseByte(tiles[x].trim());
+                        level.setBlock(x, currentMapRow, tileValue);
+                    } catch (NumberFormatException e) {
+                        System.err.println("Warning: Invalid tile format at row " + currentMapRow + ", col " + x + ": '" + tiles[x] + "'");
+                        level.setBlock(x, currentMapRow, (byte) 0); // Default to empty on error
+                    }
+                }
+                currentMapRow++;
+            } else if (line.equals("Data:")) {
+                // TODO: Implement Data section parsing if needed
+                break; // Stop reading after map for now
+            }
+            // Ignore other lines (Header, Seperator, etc.)
+        }
+        reader.close();
+
+        if (level == null) {
+            throw new IOException("Failed to parse level from file. No Map data found or invalid format.");
+        }
+
+        // Important: Set exit coordinates manually if loading raw map
+        // Assume exit is usually at the end, similar to generation logic
+        // This might need adjustment based on how level.txt is actually generated/used
+        level.xExit = level.width - 1; 
+        level.yExit = level.height - 1;
+
+        return level;
+    }
 }
