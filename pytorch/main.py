@@ -210,8 +210,10 @@ for epoch in range(opt.niter):
 
             # train with fake
             noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-            noisev = Variable(noise, volatile = True) # totally freeze netG
-            fake = Variable(netG(noisev).data)
+            with torch.no_grad():
+                noisev = Variable(noise) # totally freeze netG
+                fake = netG(noisev)
+            fake = Variable(fake.data)
             inputv = fake
             errD_fake = netD(inputv)
             errD_fake.backward(mone)
@@ -238,8 +240,8 @@ for epoch in range(opt.niter):
             % (epoch, opt.niter, i, num_batches, gen_iterations,
             errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
         if gen_iterations % 50 == 0:   #was 500
-
-            fake = netG(Variable(fixed_noise, volatile=True))
+            with torch.no_grad():
+                fake = netG(fixed_noise)
             
             im = fake.data.cpu().numpy()
             #print('SHAPE fake',type(im), im.shape)
